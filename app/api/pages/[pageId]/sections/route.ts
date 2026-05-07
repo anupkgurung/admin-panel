@@ -3,6 +3,8 @@ import { randomBytes } from "crypto";
 
 import { prisma } from "@/lib/db";
 import { getActiveTheme } from "@/lib/admin/activeTheme";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { validateProps } from "@/lib/validation/validateProps";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,9 @@ export async function POST(
   req: Request,
   { params }: { params: { pageId: string } },
 ) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -62,6 +67,20 @@ export async function POST(
     );
   }
 
+  // Validate only if explicit props are sent. New sections created with
+  // empty body or empty props start as "draft" sections (filled in by admin via PATCH).
+  let propsToStore: object = {};
+  if (props && typeof props === "object" && Object.keys(props).length > 0) {
+    const result = validateProps(component.schema as object, props);
+    if (!result.valid) {
+      return NextResponse.json(
+        { error: "validation_failed", errors: result.errors },
+        { status: 400 },
+      );
+    }
+    propsToStore = result.data as object;
+  }
+
   const last = await prisma.pageSection.findFirst({
     where: { pageId: params.pageId },
     orderBy: { order: "desc" },
@@ -88,7 +107,7 @@ export async function POST(
       order: nextOrder,
       enabled: true,
       instanceKey,
-      props: (props ?? {}) as object,
+      props: propsToStore,
     },
   });
 

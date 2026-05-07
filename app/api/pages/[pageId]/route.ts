@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,9 @@ export async function GET(
   _req: Request,
   { params }: { params: { pageId: string } },
 ) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   const page = await prisma.page.findUnique({
     where: { id: params.pageId },
     include: {
@@ -53,6 +57,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: { pageId: string } },
 ) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   let body: unknown;
   try {
     body = await req.json();
