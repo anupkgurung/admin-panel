@@ -1,62 +1,8 @@
 import { PrismaClient, PageStatus } from "@prisma/client";
 
+import { syncComponentDefinitions } from "../lib/components/sync";
+
 const prisma = new PrismaClient();
-
-const heroSchema = {
-  $schema: "https://json-schema.org/draft/2020-12/schema",
-  title: "Hero",
-  type: "object",
-  additionalProperties: false,
-  required: ["headline", "cta"],
-  properties: {
-    variant: {
-      type: "string",
-      enum: ["centered", "split"],
-      default: "centered",
-    },
-    headline: { type: "string", minLength: 1, maxLength: 80 },
-    subheadline: { type: "string", maxLength: 180 },
-    cta: {
-      type: "object",
-      additionalProperties: false,
-      required: ["label", "href"],
-      properties: {
-        label: { type: "string", minLength: 1, maxLength: 30 },
-        href: { type: "string", minLength: 1 },
-        style: {
-          type: "string",
-          enum: ["primary", "secondary"],
-          default: "primary",
-        },
-      },
-    },
-  },
-};
-
-const faqSchema = {
-  $schema: "https://json-schema.org/draft/2020-12/schema",
-  title: "FAQ",
-  type: "object",
-  additionalProperties: false,
-  required: ["items"],
-  properties: {
-    title: { type: "string", default: "FAQs", maxLength: 60 },
-    items: {
-      type: "array",
-      minItems: 1,
-      maxItems: 20,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["question", "answer"],
-        properties: {
-          question: { type: "string", minLength: 1, maxLength: 120 },
-          answer: { type: "string", minLength: 1, maxLength: 400 },
-        },
-      },
-    },
-  },
-};
 
 async function main() {
   const modern = await prisma.theme.upsert({
@@ -73,6 +19,9 @@ async function main() {
         radius: { sm: 8, md: 12 },
         spacing: { sectionY: 64 },
       },
+      // The DB column is now unused at runtime (allowlist comes from the
+      // in-code registry) but we keep it populated so older code paths and
+      // ad-hoc DB inspection still see something coherent.
       allowedComponents: ["hero", "faq"],
     },
     create: {
@@ -125,16 +74,15 @@ async function main() {
     },
   });
 
-  const hero = await prisma.componentDefinition.upsert({
-    where: { key: "hero" },
-    update: { name: "Hero", schema: heroSchema },
-    create: { key: "hero", name: "Hero", schema: heroSchema },
-  });
+  // Component definitions (key/name/schema) are sourced from the co-located
+  // files in components/themes/_definitions/* via syncComponentDefinitions.
+  await syncComponentDefinitions(prisma);
 
-  const faq = await prisma.componentDefinition.upsert({
+  const hero = await prisma.componentDefinition.findUniqueOrThrow({
+    where: { key: "hero" },
+  });
+  const faq = await prisma.componentDefinition.findUniqueOrThrow({
     where: { key: "faq" },
-    update: { name: "FAQ", schema: faqSchema },
-    create: { key: "faq", name: "FAQ", schema: faqSchema },
   });
 
   const existingSettings = await prisma.siteSettings.findFirst();

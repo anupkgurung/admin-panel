@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 
 import { prisma } from "@/lib/db";
-import { loadActivePage } from "@/lib/admin/loadActivePage";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { getActiveTheme } from "@/lib/admin/activeTheme";
+import { getAllowedComponents } from "@/lib/registry";
 import { validateProps } from "@/lib/validation/validateProps";
 
 export const dynamic = "force-dynamic";
@@ -13,21 +14,12 @@ function makeInstanceKey(componentKey: string): string {
   return `${componentKey}_${suffix}`;
 }
 
-function asAllowlist(raw: unknown): string[] {
-  return Array.isArray(raw)
-    ? (raw as unknown[]).filter((v): v is string => typeof v === "string")
-    : [];
-}
-
 export async function POST(
   req: Request,
   { params }: { params: { pageId: string } },
 ) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
-
-  const guard = await loadActivePage(params.pageId);
-  if (!guard.ok) return guard.response;
 
   let body: unknown;
   try {
@@ -48,15 +40,27 @@ export async function POST(
     );
   }
 
-  const pageWithTheme = await prisma.page.findUnique({
-    where: { id: params.pageId },
-    select: {
-      id: true,
-      theme: { select: { key: true, allowedComponents: true } },
-    },
+  const activeTheme = await getActiveTheme();
+
+  const page = await prisma.page.findFirst({
+    where: { id: params.pageId, themeId: activeTheme.id },
+    include: { theme: { select: { key: true } } },
   });
-  if (!pageWithTheme) {
+  if (!page) {
     return NextResponse.json({ error: "page_not_found" }, { status: 404 });
+  }
+
+  const allowed = getAllowedComponents(page.theme.key);
+  if (!allowed.includes(componentKey)) {
+    return NextResponse.json(
+      {
+        error: "component_not_allowed_by_theme",
+        componentKey,
+        themeKey: page.theme.key,
+        allowedComponents: allowed,
+      },
+      { status: 400 },
+    );
   }
 
   const component = await prisma.componentDefinition.findUnique({
@@ -66,19 +70,6 @@ export async function POST(
     return NextResponse.json(
       { error: "component_not_found", componentKey },
       { status: 404 },
-    );
-  }
-
-  const allowed = asAllowlist(pageWithTheme.theme.allowedComponents);
-  if (!allowed.includes(componentKey)) {
-    return NextResponse.json(
-      {
-        error: "component_not_allowed_by_theme",
-        componentKey,
-        themeKey: pageWithTheme.theme.key,
-        allowedComponents: allowed,
-      },
-      { status: 400 },
     );
   }
 

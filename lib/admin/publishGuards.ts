@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getAllowedComponents } from "@/lib/registry";
 import { validateProps } from "@/lib/validation/validateProps";
 
 export type AllowlistViolation = {
@@ -17,15 +18,9 @@ export type PropsViolation = {
   errors: { path: string; message: string }[];
 };
 
-function asAllowlist(raw: unknown): string[] {
-  return Array.isArray(raw)
-    ? (raw as unknown[]).filter((v): v is string => typeof v === "string")
-    : [];
-}
-
 /**
  * Returns sections of pages owned by `themeId` whose component key is not in
- * the theme's `allowedComponents`. Used as the theme-switch publish guard:
+ * the theme's code-derived allowlist. Used as the theme-switch publish guard:
  * when activating a theme, only that theme's own pages are inspected, since
  * pages of other themes never render under the activated theme.
  */
@@ -34,9 +29,11 @@ export async function findThemeSectionsViolatingAllowlist(
 ): Promise<AllowlistViolation[]> {
   const theme = await prisma.theme.findUnique({
     where: { id: themeId },
-    select: { allowedComponents: true },
+    select: { key: true },
   });
-  const allowed = new Set(asAllowlist(theme?.allowedComponents));
+  if (!theme) return [];
+
+  const allowed = new Set(getAllowedComponents(theme.key));
 
   const sections = await prisma.pageSection.findMany({
     where: { page: { themeId } },
@@ -62,9 +59,8 @@ export async function findThemeSectionsViolatingAllowlist(
 
 /**
  * Returns sections on the given page whose component is not in the page's
- * theme's `allowedComponents`. Allowlist source-of-truth: the page's theme
- * (never the active theme — those happen to coincide today, but the rule is
- * "section must be allowed by its page's theme").
+ * theme's code-derived allowlist. The allowlist source-of-truth is the
+ * page's theme (never the active theme).
  */
 export async function findPageSectionsAllowlistViolations(
   pageId: string,
@@ -72,7 +68,7 @@ export async function findPageSectionsAllowlistViolations(
   const page = await prisma.page.findUnique({
     where: { id: pageId },
     select: {
-      theme: { select: { key: true, allowedComponents: true } },
+      theme: { select: { key: true } },
     },
   });
 
@@ -80,7 +76,7 @@ export async function findPageSectionsAllowlistViolations(
     return { themeKey: null, violations: [] };
   }
 
-  const allowed = new Set(asAllowlist(page.theme.allowedComponents));
+  const allowed = new Set(getAllowedComponents(page.theme.key));
 
   const sections = await prisma.pageSection.findMany({
     where: { pageId },

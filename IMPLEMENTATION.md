@@ -198,6 +198,143 @@ Operational hardening:
 - section previews
 - empty states + error messaging
 
+## Phase 10 — Refactor (Complexity Reduction) (2–4 days)
+**Outcome**: same product behavior, smaller surface area. The architecture stays "DB-driven UI", but with **code as the source of truth for components**, fewer round-trips per request, simpler mutation plumbing, and shared types instead of duplicated DTOs.
+
+### Decisions locked for this phase
+- **In scope now**: items R1, R2, R3, R4 (Option B), R5, R7, R8 below.
+- **Deferred (recorded, not implemented now)**: R6 (singleton `site_settings` enforcement), R9 (env validation at boot), R10 (admin draft preview route), R11 (hashed admin password), R12 (caching + tag revalidation).
+
+### R1. Component source-of-truth = code
+**Outcome**: a theme's available components are derived from the in-code registry; the DB is no longer asked "which components does this theme allow?".
+
+- Registry stays at [`lib/registry/index.ts`](lib/registry/index.ts) and remains canonical for `themeKey × componentKey → React component`.
+- Add a single helper to read allowed component keys from the registry:
+  - `getAllowedComponents(themeKey: string): string[]` returning `Object.keys(registry[themeKey] ?? {})`.
+- Replace every read of `theme.allowedComponents` (DB JSON column) with this helper:
+  - [`lib/admin/activeTheme.ts`](lib/admin/activeTheme.ts)
+  - [`lib/admin/publishGuards.ts`](lib/admin/publishGuards.ts) (both `findThemeSectionsViolatingAllowlist` and `findPageSectionsAllowlistViolations`)
+  - [`app/api/site/active-theme/route.ts`](app/api/site/active-theme/route.ts)
+  - [`app/admin/pages/page.tsx`](app/admin/pages/page.tsx)
+  - [`app/api/pages/[pageId]/sections/route.ts`](app/api/pages/[pageId]/sections/route.ts) (the inline `asAllowlist` + theme join)
+- Drop the duplicated `asAllowlist()` helper from all four files above.
+- Keep the DB column for now (no migration in this phase), but treat it as unused. A follow-up cleanup can drop `themes.allowed_components` once no code reads it.
+
+### R2. Co-locate component schemas with React components
+**Outcome**: schema, name, and the React component live together; the seed becomes a sync step, not the source of truth.
+
+- For each component, create a co-located definition file, e.g. `components/themes/_definitions/hero.ts` and `faq.ts`, exporting:
+  - `key`, `name`, `schema` (JSON Schema), and a re-export of the per-theme React components if convenient.
+- Move the inline schemas out of [`prisma/seed.ts`](prisma/seed.ts) and into those files.
+- Add a `npm run sync:components` script that upserts `component_definitions` from the in-code definitions:
+  - keeps the DB row (so `page_sections.component_definition_id` FK still works)
+  - keeps `schema` in DB (so AJV still validates server-side without importing component code into routes that don't need it)
+- The seed continues to run components sync first, then site/themes/page seed.
+
+### R3. Collapse `asAllowlist` + `Json` typing dance
+**Outcome**: fewer "is this actually a `string[]`?" checks scattered across the codebase.
+
+- Once R1 lands, the only remaining `asAllowlist` consumer is theme bootstrap. Remove the helper from:
+  - [`lib/admin/publishGuards.ts`](lib/admin/publishGuards.ts)
+  - [`lib/admin/activeTheme.ts`](lib/admin/activeTheme.ts)
+  - [`app/api/site/active-theme/route.ts`](app/api/site/active-theme/route.ts)
+  - [`app/admin/pages/page.tsx`](app/admin/pages/page.tsx)
+- No DB migration in this phase. Switching `themes.allowed_components` to a real Postgres `text[]` is left as a follow-up cleanup.
+
+### R4. Single-query authorization (Option B)
+**Outcome**: every page/section route does **one** scoped DB call instead of `loadActivePage` + a second `findUnique`.
+
+- Replace the `load + verify + load` pattern with `findFirst({ where: { id, themeId: activeTheme.id }, include: ... })` (and analogous `update({ where: { id_themeId: ... } })` shapes). A single `null` result covers both not-found and wrong-theme.
+- Apply to:
+  - [`app/api/pages/[pageId]/route.ts`](app/api/pages/[pageId]/route.ts) — `GET`, `PATCH`
+  - [`app/api/pages/[pageId]/sections/route.ts`](app/api/pages/[pageId]/sections/route.ts) — `POST`
+  - [`app/api/pages/[pageId]/sections/reorder/route.ts`](app/api/pages/[pageId]/sections/reorder/route.ts) — `POST`
+  - [`app/api/pages/[pageId]/publish/route.ts`](app/api/pages/[pageId]/publish/route.ts) — `POST`
+  - [`app/api/pages/[pageId]/unpublish/route.ts`](app/api/pages/[pageId]/unpublish/route.ts) — `POST`
+  - [`app/api/sections/[sectionId]/route.ts`](app/api/sections/[sectionId]/route.ts) — `PATCH`, `DELETE` (scope by `page.themeId = activeTheme.id` in the `where`)
+- Delete [`lib/admin/loadActivePage.ts`](lib/admin/loadActivePage.ts) once no callsites remain.
+- Keep the 404-not-403 behavior (do not leak existence of pages/sections owned by non-active themes).
+
+### R5. Server actions for admin mutations
+**Outcome**: admin UI calls server actions directly; client-side `fetch('/api/...')`, `formatError`, and ad-hoc HTTP envelopes are removed.
+
+- Create a single admin actions module, e.g. `lib/admin/actions.ts`, with `"use server"` exports:
+  - `createPage(input)`, `updatePage(pageId, input)`
+  - `addSection(pageId, componentKey)`, `updateSection(sectionId, patch)`, `deleteSection(sectionId)`
+  - `reorderSection(pageId, sectionId, direction)` (see R7)
+  - `publishPage(pageId)`, `unpublishPage(pageId)`
+  - `setActiveTheme(themeKey)`
+- Each action runs `requireAdmin()` server-side, performs the single-query write from R4, and ends with `revalidatePath('/admin/pages')` and/or `revalidatePath('/admin/pages/[pageId]')` as appropriate.
+- Migrate clients off `fetch()`:
+  - [`components/admin/NewPageForm.tsx`](components/admin/NewPageForm.tsx)
+  - [`components/admin/PageBuilder.tsx`](components/admin/PageBuilder.tsx) (drop `call()` + `formatError`)
+  - [`components/admin/PublishControls.tsx`](components/admin/PublishControls.tsx)
+  - [`components/admin/ActiveThemeSwitcher.tsx`](components/admin/ActiveThemeSwitcher.tsx)
+- Server actions return a typed result envelope (e.g. `{ ok: true, ... } | { ok: false, code, details? }`) so UI error handling is one shape.
+- Decide per-route whether to **keep** the JSON `/api/*` handlers as a thin external API or **delete** them. Default for this phase: keep handlers that route handlers reuse internally, delete ones with no remaining callers (notably `/api/components/*` and `/api/themes`). Re-evaluate at the end of the phase.
+
+### R7. Reorder = one update per move
+**Outcome**: moving a section is a single `UPDATE`, not a multi-row transaction.
+
+- Switch `page_sections.order` to a fractional rank (`Decimal` or `Float`/`Numeric`) so a move can compute `newOrder = (prev.order + next.order) / 2`:
+  - one Prisma migration on [`prisma/schema.prisma`](prisma/schema.prisma) and [`prisma/migrations/`](prisma/migrations/) changing the column type and preserving existing values (current ints map cleanly).
+- Replace the batch reorder endpoint logic in [`app/api/pages/[pageId]/sections/reorder/route.ts`](app/api/pages/[pageId]/sections/reorder/route.ts):
+  - input becomes `{ sectionId, beforeId?: string | null, afterId?: string | null }` (or `{ sectionId, direction: -1 | 1 }` and the server resolves neighbors).
+  - performs **one** `pageSection.update({ where: { id, page: { themeId: active.id } }, data: { order: midpoint } })`.
+- Update the corresponding `moveSection` flow in [`components/admin/PageBuilder.tsx`](components/admin/PageBuilder.tsx) (or, after R5, the `reorderSection` server action) to send a single move instead of a two-row swap.
+- Add a lightweight compaction path for the rare case where neighboring `order` values converge below a threshold; not required to ship.
+- Render order in [`app/(site)/[[...slug]]/page.tsx`](app/(site)/[[...slug]]/page.tsx) and admin builder remains `orderBy: { order: 'asc' }` — no read-side changes.
+
+### R8. Centralized DTO/types
+**Outcome**: one place defines what a `Page`, `Section`, `Theme`, and violation shape look like across server and client.
+
+- Add `lib/types/admin.ts` (or `lib/types/page.ts`) exporting:
+  - `PageWithSections = Prisma.PageGetPayload<{ include: { sections: { include: { componentDefinition: true } } } }>`
+  - `PageDTO`, `SectionDTO`, `ComponentDef` (UI-facing shapes derived from the Prisma type via small mappers)
+  - `ActiveThemeDTO` (already partially exists in [`lib/admin/activeTheme.ts`](lib/admin/activeTheme.ts) — move/rename here)
+  - `AllowlistViolation`, `PropsViolation`, `PublishError` (currently re-declared in [`components/admin/PublishControls.tsx`](components/admin/PublishControls.tsx) and [`lib/admin/publishGuards.ts`](lib/admin/publishGuards.ts))
+- Consumers to refactor:
+  - [`components/admin/PageBuilder.tsx`](components/admin/PageBuilder.tsx) — drop local `ComponentDef`, `SectionDTO`, `PageDTO`, `ActiveTheme`
+  - [`components/admin/PublishControls.tsx`](components/admin/PublishControls.tsx) — drop local violation types
+  - [`components/admin/ActiveThemeSwitcher.tsx`](components/admin/ActiveThemeSwitcher.tsx) — drop local `Theme`, `Violation`
+  - [`app/admin/pages/[pageId]/page.tsx`](app/admin/pages/[pageId]/page.tsx) — use the shared mapper instead of inlining the `PageDTO` shape
+  - [`lib/renderer/DynamicRenderer.tsx`](lib/renderer/DynamicRenderer.tsx) — keep `RenderableSection` here (public-render-only) but re-export from `lib/types` if it grows.
+- Provide a single mapper, e.g. `toPageDTO(page: PageWithSections): PageDTO`, used by both the admin RSC entry and (after R5) any server action that needs to return a page payload.
+
+### Execution order
+1. **R4** single-query inline checks — backend-only, behavior-preserving; unblocks R7 and reduces churn for R5.
+2. **R7** one-update reorder — narrow change; easy to verify after R4.
+3. **R1 + R3** code-first allowlist + delete duplicated `asAllowlist` — pure refactor, small diff.
+4. **R8** centralize DTO/types — done before R5 so server actions return shared types.
+5. **R5** migrate admin mutations to server actions — biggest UI change; do last.
+6. **R2** co-locate component schemas + `sync:components` script — independent; can land any time after R1.
+
+### Deliverables
+- No `loadActivePage` callers remain; helper file removed.
+- Page/section mutation routes (and any retained JSON handlers) perform exactly one DB read or write per request for the page-ownership check.
+- Admin UI components contain no `fetch('/api/...')` calls; mutations go through server actions in `lib/admin/actions.ts`.
+- `page_sections.order` is a fractional rank; reorder endpoint performs a single `UPDATE`.
+- A single `lib/types/admin.ts` (or equivalent) is the only place these DTOs are defined.
+- `getAllowedComponents(themeKey)` is the only allowlist source read by API handlers and admin pages; `asAllowlist()` is gone from `lib/admin/*` and `app/api/*`.
+- Component schemas live next to their React components and are upserted into `component_definitions` via `sync:components`.
+
+### Refactor verification (regression checks)
+Re-run these against the existing behavior — none of the user-visible behavior should change:
+- Theme isolation: a page bound to theme A returns 404 (public + admin write APIs) when theme B is active.
+- Publish guard: blocks on allowlist violations (theme = page's theme) and on AJV failures, with the same error payload shape consumed by `PublishControls`.
+- Theme switch guard: blocks switching to a destination theme whose own pages contain disallowed sections.
+- Reorder: rendered order in `app/(site)/[[...slug]]/page.tsx` and the admin builder matches the order chosen in the UI; arbitrary up/down moves remain stable.
+- Section CRUD via server actions: add / toggle enabled / edit props / delete behave identically to the previous JSON-fetch flow.
+- AJV validation rejects invalid props on both `addSection` and `updateSection` paths.
+- Admin authentication is still enforced on every mutating server action (no action runs without `requireAdmin`).
+
+### Out of scope (deferred, recorded for later)
+- **R6** Make `site_settings` a true singleton (DB-enforced) and/or replace it with `themes.is_active`.
+- **R9** Validate required env (`DATABASE_URL`, `NEXTAUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`) at module load.
+- **R10** Admin draft-preview route at `/admin/preview/[pageId]` that bypasses the published filter.
+- **R11** Replace plaintext `ADMIN_PASSWORD` with a hashed credential (`ADMIN_PASSWORD_HASH` + bcrypt/argon2 compare).
+- **R12** Tag-based caching with `revalidateTag('page:'+id)` + drop `force-dynamic` from public routes.
+
 ## Final testing plan (run before launch)
 
 ### A) Data + validation tests (backend/API)

@@ -28,17 +28,14 @@ export async function PATCH(
     instanceKey?: string;
   };
 
-  const data: {
-    props?: object;
-    enabled?: boolean;
-    order?: number;
-    instanceKey?: string;
-  } = {};
+  const activeTheme = await getActiveTheme();
 
-  const section = await prisma.pageSection.findUnique({
-    where: { id: params.sectionId },
+  const section = await prisma.pageSection.findFirst({
+    where: {
+      id: params.sectionId,
+      page: { themeId: activeTheme.id },
+    },
     include: {
-      page: { select: { themeId: true } },
       componentDefinition: { select: { schema: true } },
     },
   });
@@ -47,11 +44,12 @@ export async function PATCH(
     return NextResponse.json({ error: "section_not_found" }, { status: 404 });
   }
 
-  const activeTheme = await getActiveTheme();
-  if (section.page.themeId !== activeTheme.id) {
-    // Don't leak the existence of sections owned by non-active themes.
-    return NextResponse.json({ error: "section_not_found" }, { status: 404 });
-  }
+  const data: {
+    props?: object;
+    enabled?: boolean;
+    order?: number;
+    instanceKey?: string;
+  } = {};
 
   if (props && typeof props === "object") {
     const result = validateProps(
@@ -76,15 +74,11 @@ export async function PATCH(
     return NextResponse.json({ error: "no_fields_to_update" }, { status: 400 });
   }
 
-  try {
-    const updated = await prisma.pageSection.update({
-      where: { id: params.sectionId },
-      data,
-    });
-    return NextResponse.json({ section: updated });
-  } catch {
-    return NextResponse.json({ error: "section_not_found" }, { status: 404 });
-  }
+  const updated = await prisma.pageSection.update({
+    where: { id: params.sectionId },
+    data,
+  });
+  return NextResponse.json({ section: updated });
 }
 
 export async function DELETE(
@@ -94,24 +88,20 @@ export async function DELETE(
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  const section = await prisma.pageSection.findUnique({
-    where: { id: params.sectionId },
-    select: { id: true, page: { select: { themeId: true } } },
+  const activeTheme = await getActiveTheme();
+
+  const section = await prisma.pageSection.findFirst({
+    where: {
+      id: params.sectionId,
+      page: { themeId: activeTheme.id },
+    },
+    select: { id: true },
   });
 
   if (!section) {
     return NextResponse.json({ error: "section_not_found" }, { status: 404 });
   }
 
-  const activeTheme = await getActiveTheme();
-  if (section.page.themeId !== activeTheme.id) {
-    return NextResponse.json({ error: "section_not_found" }, { status: 404 });
-  }
-
-  try {
-    await prisma.pageSection.delete({ where: { id: params.sectionId } });
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "section_not_found" }, { status: 404 });
-  }
+  await prisma.pageSection.delete({ where: { id: params.sectionId } });
+  return NextResponse.json({ ok: true });
 }
