@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   const themes = await prisma.theme.findMany({
     orderBy: { key: "asc" },
     select: {

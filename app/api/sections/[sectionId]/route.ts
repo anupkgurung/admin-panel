@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { validateProps } from "@/lib/validation/validateProps";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +10,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: { sectionId: string } },
 ) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -28,7 +34,31 @@ export async function PATCH(
     instanceKey?: string;
   } = {};
 
-  if (props && typeof props === "object") data.props = props as object;
+  if (props && typeof props === "object") {
+    const section = await prisma.pageSection.findUnique({
+      where: { id: params.sectionId },
+      include: {
+        componentDefinition: { select: { schema: true } },
+      },
+    });
+
+    if (!section) {
+      return NextResponse.json({ error: "section_not_found" }, { status: 404 });
+    }
+
+    const result = validateProps(
+      section.componentDefinition.schema as object,
+      props,
+    );
+    if (!result.valid) {
+      return NextResponse.json(
+        { error: "validation_failed", errors: result.errors },
+        { status: 400 },
+      );
+    }
+    data.props = result.data as object;
+  }
+
   if (typeof enabled === "boolean") data.enabled = enabled;
   if (typeof order === "number" && Number.isFinite(order)) data.order = order;
   if (typeof instanceKey === "string" && instanceKey.length > 0)
@@ -44,7 +74,7 @@ export async function PATCH(
       data,
     });
     return NextResponse.json({ section: updated });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "section_not_found" }, { status: 404 });
   }
 }
@@ -53,6 +83,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { sectionId: string } },
 ) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   try {
     await prisma.pageSection.delete({ where: { id: params.sectionId } });
     return NextResponse.json({ ok: true });

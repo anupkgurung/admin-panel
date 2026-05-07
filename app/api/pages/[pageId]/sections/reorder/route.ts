@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,9 @@ export async function POST(
   req: Request,
   { params }: { params: { pageId: string } },
 ) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   let body: unknown;
   try {
     body = await req.json();

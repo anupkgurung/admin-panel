@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   const pages = await prisma.page.findMany({
     orderBy: { updatedAt: "desc" },
     select: {
@@ -31,6 +35,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   let body: unknown;
   try {
     body = await req.json();

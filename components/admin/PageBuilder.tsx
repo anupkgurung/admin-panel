@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { SchemaForm, defaultsForSchema, type JSONSchema } from "./SchemaForm";
+import { SchemaForm, type JSONSchema } from "./SchemaForm";
 
 type ComponentDef = {
   id: string;
@@ -77,14 +77,10 @@ export function PageBuilder({
 
   async function addSection(componentKey: string) {
     setError(null);
-    const componentDef = allowedComponents.find((c) => c.key === componentKey);
-    const initialProps = componentDef
-      ? defaultsForSchema(componentDef.schema as JSONSchema)
-      : {};
     const res = await call(`/api/pages/${page.id}/sections`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ componentKey, props: initialProps ?? {} }),
+      body: JSON.stringify({ componentKey }),
     });
     if (!res.ok) {
       setError(formatError(res.data, res.status));
@@ -364,7 +360,17 @@ function SectionEditor({
 
 function formatError(data: unknown, status: number): string {
   if (data && typeof data === "object" && "error" in data) {
-    return `${(data as { error: string }).error} (HTTP ${status})`;
+    const obj = data as {
+      error: string;
+      errors?: { path: string; message: string }[];
+    };
+    if (Array.isArray(obj.errors) && obj.errors.length > 0) {
+      const detail = obj.errors
+        .map((e) => `${e.path || "/"}: ${e.message}`)
+        .join("; ");
+      return `${obj.error} (HTTP ${status}) - ${detail}`;
+    }
+    return `${obj.error} (HTTP ${status})`;
   }
   return `Request failed (HTTP ${status})`;
 }
