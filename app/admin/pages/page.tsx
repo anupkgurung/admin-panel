@@ -3,12 +3,21 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getActiveTheme } from "@/lib/admin/activeTheme";
 import { NewPageForm } from "@/components/admin/NewPageForm";
+import { ActiveThemeSwitcher } from "@/components/admin/ActiveThemeSwitcher";
 
 export const dynamic = "force-dynamic";
 
+function asAllowlist(raw: unknown): string[] {
+  return Array.isArray(raw)
+    ? (raw as unknown[]).filter((v): v is string => typeof v === "string")
+    : [];
+}
+
 export default async function AdminPagesIndex() {
-  const [pages, activeTheme] = await Promise.all([
+  const activeTheme = await getActiveTheme();
+  const [pages, themesRaw] = await Promise.all([
     prisma.page.findMany({
+      where: { themeId: activeTheme.id },
       orderBy: { updatedAt: "desc" },
       select: {
         id: true,
@@ -19,18 +28,34 @@ export default async function AdminPagesIndex() {
         _count: { select: { sections: true } },
       },
     }),
-    getActiveTheme(),
+    prisma.theme.findMany({
+      orderBy: { key: "asc" },
+      select: { id: true, key: true, name: true, allowedComponents: true },
+    }),
   ]);
+
+  const themes = themesRaw.map((t) => ({
+    id: t.id,
+    key: t.key,
+    name: t.name,
+    allowedComponents: asAllowlist(t.allowedComponents),
+  }));
+
+  const current = themes.find((t) => t.key === activeTheme.key) ?? {
+    id: activeTheme.id,
+    key: activeTheme.key,
+    name: activeTheme.name,
+    allowedComponents: activeTheme.allowedComponents,
+  };
 
   return (
     <div className="space-y-8">
+      <ActiveThemeSwitcher current={current} themes={themes} />
+
       <section>
         <h1 className="text-xl font-semibold">Pages</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Active theme:{" "}
-          <span className="font-medium">{activeTheme.name}</span> (
-          <code className="font-mono text-xs">{activeTheme.key}</code>) - allows{" "}
-          {activeTheme.allowedComponents.join(", ") || "no components"}
+          Active theme allows: {activeTheme.allowedComponents.join(", ") || "no components"}
         </p>
       </section>
 

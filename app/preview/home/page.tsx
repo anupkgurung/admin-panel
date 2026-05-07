@@ -7,15 +7,17 @@ export default async function PreviewHome() {
     include: { activeTheme: true },
   });
 
-  const home = await prisma.page.findUnique({
-    where: { slug: "/" },
-    include: {
-      sections: {
-        orderBy: { order: "asc" },
-        include: { componentDefinition: true },
-      },
-    },
-  });
+  const home = settings
+    ? await prisma.page.findFirst({
+        where: { slug: "/", themeId: settings.activeThemeId },
+        include: {
+          sections: {
+            orderBy: { order: "asc" },
+            include: { componentDefinition: true },
+          },
+        },
+      })
+    : null;
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">

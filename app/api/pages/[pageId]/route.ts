@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { loadActivePage } from "@/lib/admin/loadActivePage";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,9 @@ export async function GET(
 ) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
+
+  const guard = await loadActivePage(params.pageId);
+  if (!guard.ok) return guard.response;
 
   const page = await prisma.page.findUnique({
     where: { id: params.pageId },
@@ -60,6 +64,9 @@ export async function PATCH(
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
+  const guard = await loadActivePage(params.pageId);
+  if (!guard.ok) return guard.response;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -79,7 +86,11 @@ export async function PATCH(
 
   if (data.slug) {
     const existing = await prisma.page.findFirst({
-      where: { slug: data.slug, NOT: { id: params.pageId } },
+      where: {
+        slug: data.slug,
+        themeId: guard.page.themeId,
+        NOT: { id: params.pageId },
+      },
       select: { id: true },
     });
     if (existing) {

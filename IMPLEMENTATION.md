@@ -3,17 +3,20 @@
 This breaks the MVP into phases that keep you shipping something usable early, while building on a stable foundation (no overengineering).
 
 ## Locked decisions (this MVP)
-- **Single-site MVP**: no `sites` table for now; we keep a singleton `SiteSettings` row to hold the **site-wide active theme**.
-- **Site-wide theme**: the entire site uses one theme at a time (chosen by admin), not per-page.
-- **Theme switch rule**: when admin changes the active theme, **block publish** if any current sections use components not in the new theme’s `allowed_components`.
+- **Single-site MVP**: no `sites` table for now; we keep a singleton `SiteSettings` row that points at the **active theme**.
+- **Per-theme page scope**: every `Page` belongs to exactly one `Theme` via `pages.theme_id`. The active theme acts as a filter — only pages of the active theme are visible publicly and in admin. Switching themes hides the previous theme's pages without deleting them; reactivating brings them back.
+- **Slug uniqueness is per-theme**: `(theme_id, slug)` is unique. `modern` and `minimal` can each own their own `/`.
+- **Allowlist source-of-truth**: every allowlist check reads from **`page.theme.allowedComponents`** (or, for the theme-switch guard, the destination theme's own `allowedComponents`). The active theme is only used for visibility filtering and auto-attaching newly-created pages.
+- **Theme switch rule**: when admin changes the active theme, **block the switch** if any sections of the destination theme's own pages use components not in that theme's `allowed_components`. (Sections of other themes' pages are not validated because they won't render under the new active theme.)
+- **Per-page publish rule**: block publish if any section's component is not in the page's theme's `allowedComponents`, or any section's `props` fail AJV validation.
 - **UI**: Tailwind CSS (no component library yet).
 - **Auth**: NextAuth/Auth.js, single admin (credentials), protect `/admin/*` and admin write APIs.
 - **Public access**: public site is read-only and viewable by anyone; only logged-in admin can edit.
 
 ## Future-use suggestions (not in MVP, recorded for later)
 - **Multi-tenant `sites` table**: introduce when supporting multiple websites/customers.
-- **Per-page theme override**: allow specific pages to override the site-wide theme later if ever needed.
-- **Auto-disable on theme switch**: alternative rule to "block publish" (we chose block publish).
+- **Cross-theme editing**: allow admin to browse/edit pages of any theme without switching the active site theme.
+- **Auto-disable on theme switch**: alternative rule to "block switch" (we chose block switch).
 
 ## Guiding principles
 - **One repo, one deploy**: public site + admin + APIs in a single Next.js app.
@@ -43,7 +46,7 @@ Implement the MVP schema:
 - `themes` (with required `allowed_components`)
 - `site_settings` (singleton; `active_theme_id` → `themes.id`)
 - `component_definitions`
-- `pages`
+- `pages` (FK `theme_id` → `themes.id`; `(theme_id, slug)` unique)
 - `page_sections`
 - `assets` (keep it; minimal columns)
 
@@ -51,7 +54,7 @@ Add seed data:
 - Theme `modern` (active) and theme `minimal` tokens
 - Component definitions `hero`, `faq` with schemas
 - `SiteSettings` singleton with `active_theme_id` = `modern`
-- A `Home` page (status `published`) with 2 sections (hero + faq)
+- A `Home` page bound to `modern` (status `published`) with 2 sections (hero + faq)
 
 Deliverables:
 - migrations applied
@@ -148,21 +151,30 @@ Deliverables:
 - unauthenticated users cannot access admin or write APIs
 - authenticated users can edit as expected
 
-## Phase 7 — Draft → publish workflow + public visibility rules (0.5–1 day)
-**Outcome**: safe publishing; public site only shows published pages.
+## Phase 7 — Draft → publish workflow + active theme switch (0.5–1 day)
+**Outcome**: safe publishing; public site only shows published pages of the active theme; admin can switch the active theme with a guard scoped to that theme's own pages.
 
 Implement:
 - `POST /api/pages/:pageId/publish` sets:
   - `status='published'`
   - `published_at=now()`
-- (Optional) `POST /api/pages/:pageId/unpublish`
-- Public read query filters `status='published'`
+- `POST /api/pages/:pageId/unpublish`
+- Public read query filters `status='published'` AND `theme_id = active_theme_id`
+- **Active site theme API**:
+  - `GET /api/site/active-theme` returns current active theme.
+  - `PATCH /api/site/active-theme` body `{ themeKey }` to switch.
 - **Theme-switch publish guard**:
-  - When the active site theme changes (or before publish), validate that every section across all pages uses a component allowed by the new theme.
-  - If any are not allowed, **block publish** and return a clear error listing the offending sections.
+  - When activating theme T, scan only sections on pages owned by T; if any uses a component not in T's `allowed_components`, **block the switch** and return a clear error listing the offending sections.
+- **Per-page publish guard**:
+  - Block publish if any section on the page uses a component not in **the page's theme's** `allowed_components` (not the active theme — see "Allowlist source-of-truth" in Locked decisions).
+  - Block publish if any section's props fail AJV validation.
+- **Active-theme scoping for admin/write APIs**:
+  - All page-by-id endpoints (`GET/PATCH /api/pages/:pageId`, `POST /api/pages/:pageId/sections`, `POST /api/pages/:pageId/sections/reorder`, publish/unpublish, and `/api/sections/:sectionId`) return 404 if the resolved page belongs to a non-active theme. This prevents cross-theme writes and avoids leaking IDs across themes.
 
 Deliverables:
-- editing drafts doesn’t affect public until publish (if you choose this model)
+- editing drafts doesn't affect public until publish
+- admin can switch active theme from the admin UI; switches that would break the destination theme's own content are blocked with a precise error
+- pages created under one theme do not appear (publicly or in admin) when another theme is active
 
 ## Phase 8 — Caching strategy (keep simple) + operational hardening (0.5–1 day)
 **Outcome**: deployed site reflects changes reliably.
@@ -192,18 +204,24 @@ Operational hardening:
 - **Schema validation**:
   - saving invalid `props` is rejected (400) with clear errors
   - saving unknown additional props is rejected if schema has `additionalProperties:false`
-- **Theme allowlist**:
-  - cannot add a section whose component is not in `themes.allowed_components`
+- **Theme allowlist (page.theme is source-of-truth)**:
+  - cannot add a section whose component is not in **the page's theme's** `allowed_components`
   - cannot change a section’s `component_definition_id` to a disallowed component
+- **Per-theme page scope**:
+  - creating a page auto-attaches it to the active theme
+  - `(theme_id, slug)` is the uniqueness key — same slug allowed under different themes
+  - page-by-id endpoints return 404 for pages owned by a non-active theme
+  - section-by-id endpoints return 404 for sections whose page is owned by a non-active theme
 - **Ordering invariants**:
   - reorder endpoint results in deterministic render order
   - no duplicate `instance_key` per page
 
 ### B) Rendering tests (public)
-- **Happy path**: `/` renders hero + faq from DB
+- **Happy path**: `/` renders hero + faq from DB (only when the page's theme is the active theme)
+- **Theme isolation**: a page bound to theme A is 404 when theme B is active
 - **Disabled sections**: a disabled section does not render
 - **Unknown component**: renders `UnknownSection` and does not crash
-- **Published-only**: draft pages return 404 (or a controlled “not found”)
+- **Published-only**: draft pages return 404 (or a controlled "not found")
 
 ### C) Admin workflow tests (end-to-end)
 - **Login required**:
@@ -214,9 +232,11 @@ Operational hardening:
   - publish → public route reflects changes
 - **Reorder**:
   - reorder sections → save → public render order matches
-- **Theme switch**:
-  - switch page theme → builder enforces new allowlist
-  - existing sections that are no longer allowed are flagged (block publish or auto-disable; pick a rule)
+- **Theme switch (per-theme isolation)**:
+  - active = modern → create `/promo`, publish → visible at `/promo`
+  - switch active → minimal → `/promo` returns 404; admin pages list does not include `/promo`
+  - switch active back → modern → `/promo` reappears
+  - reduce `modern.allowed_components` to exclude `hero` while a `modern` page still uses `hero` → reactivating `modern` is **blocked** with violations listing only `modern` pages
 
 ### D) Smoke tests in production-like environment
 - seed minimal content and verify rendering

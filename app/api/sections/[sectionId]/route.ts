@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { getActiveTheme } from "@/lib/admin/activeTheme";
 import { validateProps } from "@/lib/validation/validateProps";
 
 export const dynamic = "force-dynamic";
@@ -34,18 +35,25 @@ export async function PATCH(
     instanceKey?: string;
   } = {};
 
+  const section = await prisma.pageSection.findUnique({
+    where: { id: params.sectionId },
+    include: {
+      page: { select: { themeId: true } },
+      componentDefinition: { select: { schema: true } },
+    },
+  });
+
+  if (!section) {
+    return NextResponse.json({ error: "section_not_found" }, { status: 404 });
+  }
+
+  const activeTheme = await getActiveTheme();
+  if (section.page.themeId !== activeTheme.id) {
+    // Don't leak the existence of sections owned by non-active themes.
+    return NextResponse.json({ error: "section_not_found" }, { status: 404 });
+  }
+
   if (props && typeof props === "object") {
-    const section = await prisma.pageSection.findUnique({
-      where: { id: params.sectionId },
-      include: {
-        componentDefinition: { select: { schema: true } },
-      },
-    });
-
-    if (!section) {
-      return NextResponse.json({ error: "section_not_found" }, { status: 404 });
-    }
-
     const result = validateProps(
       section.componentDefinition.schema as object,
       props,
@@ -85,6 +93,20 @@ export async function DELETE(
 ) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
+
+  const section = await prisma.pageSection.findUnique({
+    where: { id: params.sectionId },
+    select: { id: true, page: { select: { themeId: true } } },
+  });
+
+  if (!section) {
+    return NextResponse.json({ error: "section_not_found" }, { status: 404 });
+  }
+
+  const activeTheme = await getActiveTheme();
+  if (section.page.themeId !== activeTheme.id) {
+    return NextResponse.json({ error: "section_not_found" }, { status: 404 });
+  }
 
   try {
     await prisma.pageSection.delete({ where: { id: params.sectionId } });

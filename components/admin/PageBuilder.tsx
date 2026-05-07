@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { SchemaForm, type JSONSchema } from "./SchemaForm";
+import { PublishControls } from "./PublishControls";
 
 type ComponentDef = {
   id: string;
@@ -155,14 +156,26 @@ export function PageBuilder({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-xl font-semibold">{page.title}</h1>
           <p className="mt-1 text-sm text-gray-600">
             <code className="font-mono text-xs">{page.slug}</code> · status:{" "}
-            <span className="font-medium">{page.status}</span> · theme:{" "}
+            <span
+              className={
+                page.status === "published"
+                  ? "rounded bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700"
+                  : "rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+              }
+            >
+              {page.status}
+            </span>
+            {" "}· theme:{" "}
             <span className="font-medium">{activeTheme.name}</span>
           </p>
+          <div className="mt-3">
+            <PublishControls pageId={page.id} status={page.status} />
+          </div>
         </div>
         <div className="flex items-center gap-3 text-sm">
           <Link

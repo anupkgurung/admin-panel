@@ -30,7 +30,11 @@ export default async function SitePage({
   }
 
   const page = await prisma.page.findFirst({
-    where: { slug, status: "published" },
+    where: {
+      slug,
+      status: "published",
+      themeId: settings.activeThemeId,
+    },
     include: {
       sections: {
         where: { enabled: true },

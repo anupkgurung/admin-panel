@@ -11,6 +11,8 @@ export default async function AdminPageBuilder({
 }: {
   params: { pageId: string };
 }) {
+  const activeTheme = await getActiveTheme();
+
   const page = await prisma.page.findUnique({
     where: { id: params.pageId },
     include: {
@@ -25,11 +27,9 @@ export default async function AdminPageBuilder({
     },
   });
 
-  if (!page) {
+  if (!page || page.themeId !== activeTheme.id) {
     notFound();
   }
-
-  const activeTheme = await getActiveTheme();
 
   const allowedComponents = await prisma.componentDefinition.findMany({
     where: { key: { in: activeTheme.allowedComponents } },

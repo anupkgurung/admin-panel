@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { getActiveTheme } from "@/lib/admin/activeTheme";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,10 @@ export async function GET() {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
+  const activeTheme = await getActiveTheme();
+
   const pages = await prisma.page.findMany({
+    where: { themeId: activeTheme.id },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,
@@ -61,7 +65,11 @@ export async function POST(req: Request) {
     );
   }
 
-  const existing = await prisma.page.findUnique({ where: { slug } });
+  const activeTheme = await getActiveTheme();
+
+  const existing = await prisma.page.findUnique({
+    where: { themeId_slug: { themeId: activeTheme.id, slug } },
+  });
   if (existing) {
     return NextResponse.json(
       { error: "slug_already_exists", slug },
@@ -70,7 +78,7 @@ export async function POST(req: Request) {
   }
 
   const page = await prisma.page.create({
-    data: { slug, title },
+    data: { slug, title, themeId: activeTheme.id },
     select: { id: true, slug: true, title: true, status: true },
   });
 
