@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { loadActivePage } from "@/lib/admin/loadActivePage";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,9 @@ export async function POST(
 ) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
+
+  const guard = await loadActivePage(params.pageId);
+  if (!guard.ok) return guard.response;
 
   let body: unknown;
   try {

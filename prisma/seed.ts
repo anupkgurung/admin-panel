@@ -153,13 +153,14 @@ async function main() {
   }
 
   const home = await prisma.page.upsert({
-    where: { slug: "/" },
+    where: { themeId_slug: { themeId: modern.id, slug: "/" } },
     update: {
       title: "Home",
       status: PageStatus.published,
       publishedAt: new Date(),
     },
     create: {
+      themeId: modern.id,
       slug: "/",
       title: "Home",
       status: PageStatus.published,
