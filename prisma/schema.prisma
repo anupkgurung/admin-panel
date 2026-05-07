@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PageStatus {
+  draft
+  published
+}
+
+model Theme {
+  id                String   @id @default(uuid()) @db.Uuid
+  key               String   @unique
+  name              String
+  tokens            Json     @default("{}")
+  allowedComponents Json     @default("[]") @map("allowed_components")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  activeOnSites SiteSettings[]
+
+  @@map("themes")
+}
+
+model SiteSettings {
+  id            String   @id @default(uuid()) @db.Uuid
+  siteName      String   @map("site_name")
+  activeThemeId String   @map("active_theme_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  activeTheme Theme @relation(fields: [activeThemeId], references: [id])
+
+  @@map("site_settings")
+}
+
+model ComponentDefinition {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique
+  name      String
+  schema    Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sections PageSection[]
+
+  @@map("component_definitions")
+}
+
+model Page {
+  id          String     @id @default(uuid()) @db.Uuid
+  slug        String     @unique
+  title       String
+  status      PageStatus @default(draft)
+  publishedAt DateTime?  @map("published_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  sections PageSection[]
+
+  @@map("pages")
+}
+
+model PageSection {
+  id                    String   @id @default(uuid()) @db.Uuid
+  pageId                String   @map("page_id") @db.Uuid
+  componentDefinitionId String   @map("component_definition_id") @db.Uuid
+  order                 Int
+  enabled               Boolean  @default(true)
+  instanceKey           String   @map("instance_key")
+  props                 Json     @default("{}")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  page                Page                @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  componentDefinition ComponentDefinition @relation(fields: [componentDefinitionId], references: [id])
+
+  @@unique([pageId, instanceKey])
+  @@index([pageId, order])
+  @@index([componentDefinitionId])
+  @@map("page_sections")
+}
+
+model Asset {
+  id        String   @id @default(uuid()) @db.Uuid
+  provider  String   @default("external")
+  url       String
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([url])
+  @@map("assets")
+}

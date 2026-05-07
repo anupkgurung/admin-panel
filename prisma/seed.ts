@@ -1,0 +1,256 @@
+import { PrismaClient, PageStatus } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+const heroSchema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  title: "Hero",
+  type: "object",
+  additionalProperties: false,
+  required: ["headline", "cta"],
+  properties: {
+    variant: {
+      type: "string",
+      enum: ["centered", "split"],
+      default: "centered",
+    },
+    headline: { type: "string", minLength: 1, maxLength: 80 },
+    subheadline: { type: "string", maxLength: 180 },
+    cta: {
+      type: "object",
+      additionalProperties: false,
+      required: ["label", "href"],
+      properties: {
+        label: { type: "string", minLength: 1, maxLength: 30 },
+        href: { type: "string", minLength: 1 },
+        style: {
+          type: "string",
+          enum: ["primary", "secondary"],
+          default: "primary",
+        },
+      },
+    },
+  },
+};
+
+const faqSchema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  title: "FAQ",
+  type: "object",
+  additionalProperties: false,
+  required: ["items"],
+  properties: {
+    title: { type: "string", default: "FAQs", maxLength: 60 },
+    items: {
+      type: "array",
+      minItems: 1,
+      maxItems: 20,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["question", "answer"],
+        properties: {
+          question: { type: "string", minLength: 1, maxLength: 120 },
+          answer: { type: "string", minLength: 1, maxLength: 400 },
+        },
+      },
+    },
+  },
+};
+
+async function main() {
+  const modern = await prisma.theme.upsert({
+    where: { key: "modern" },
+    update: {
+      name: "Modern",
+      tokens: {
+        colors: {
+          primary: "#2F6BFF",
+          text: "#111827",
+          bg: "#FFFFFF",
+          mutedText: "#6B7280",
+        },
+        radius: { sm: 8, md: 12 },
+        spacing: { sectionY: 64 },
+      },
+      allowedComponents: ["hero", "faq"],
+    },
+    create: {
+      key: "modern",
+      name: "Modern",
+      tokens: {
+        colors: {
+          primary: "#2F6BFF",
+          text: "#111827",
+          bg: "#FFFFFF",
+          mutedText: "#6B7280",
+        },
+        radius: { sm: 8, md: 12 },
+        spacing: { sectionY: 64 },
+      },
+      allowedComponents: ["hero", "faq"],
+    },
+  });
+
+  await prisma.theme.upsert({
+    where: { key: "minimal" },
+    update: {
+      name: "Minimal",
+      tokens: {
+        colors: {
+          primary: "#111827",
+          text: "#111827",
+          bg: "#FAFAFA",
+          mutedText: "#6B7280",
+        },
+        radius: { sm: 4, md: 6 },
+        spacing: { sectionY: 48 },
+      },
+      allowedComponents: ["hero", "faq"],
+    },
+    create: {
+      key: "minimal",
+      name: "Minimal",
+      tokens: {
+        colors: {
+          primary: "#111827",
+          text: "#111827",
+          bg: "#FAFAFA",
+          mutedText: "#6B7280",
+        },
+        radius: { sm: 4, md: 6 },
+        spacing: { sectionY: 48 },
+      },
+      allowedComponents: ["hero", "faq"],
+    },
+  });
+
+  const hero = await prisma.componentDefinition.upsert({
+    where: { key: "hero" },
+    update: { name: "Hero", schema: heroSchema },
+    create: { key: "hero", name: "Hero", schema: heroSchema },
+  });
+
+  const faq = await prisma.componentDefinition.upsert({
+    where: { key: "faq" },
+    update: { name: "FAQ", schema: faqSchema },
+    create: { key: "faq", name: "FAQ", schema: faqSchema },
+  });
+
+  const existingSettings = await prisma.siteSettings.findFirst();
+  if (!existingSettings) {
+    await prisma.siteSettings.create({
+      data: {
+        siteName: "My Website",
+        activeThemeId: modern.id,
+      },
+    });
+  } else {
+    await prisma.siteSettings.update({
+      where: { id: existingSettings.id },
+      data: { activeThemeId: modern.id, siteName: "My Website" },
+    });
+  }
+
+  const home = await prisma.page.upsert({
+    where: { slug: "/" },
+    update: {
+      title: "Home",
+      status: PageStatus.published,
+      publishedAt: new Date(),
+    },
+    create: {
+      slug: "/",
+      title: "Home",
+      status: PageStatus.published,
+      publishedAt: new Date(),
+    },
+  });
+
+  await prisma.pageSection.upsert({
+    where: {
+      pageId_instanceKey: { pageId: home.id, instanceKey: "hero_main" },
+    },
+    update: {
+      componentDefinitionId: hero.id,
+      order: 10,
+      enabled: true,
+      props: {
+        variant: "split",
+        headline: "Build landing pages in minutes",
+        subheadline: "Schema-driven sections with theme tokens.",
+        cta: { label: "Get started", href: "/signup", style: "primary" },
+      },
+    },
+    create: {
+      pageId: home.id,
+      componentDefinitionId: hero.id,
+      order: 10,
+      enabled: true,
+      instanceKey: "hero_main",
+      props: {
+        variant: "split",
+        headline: "Build landing pages in minutes",
+        subheadline: "Schema-driven sections with theme tokens.",
+        cta: { label: "Get started", href: "/signup", style: "primary" },
+      },
+    },
+  });
+
+  await prisma.pageSection.upsert({
+    where: {
+      pageId_instanceKey: { pageId: home.id, instanceKey: "faq_general" },
+    },
+    update: {
+      componentDefinitionId: faq.id,
+      order: 40,
+      enabled: true,
+      props: {
+        title: "Common questions",
+        items: [
+          {
+            question: "Do you store HTML?",
+            answer:
+              "No. We store structure + props and render React on the server.",
+          },
+          {
+            question: "Can I reorder sections?",
+            answer: "Yes. Reordering updates the order column.",
+          },
+        ],
+      },
+    },
+    create: {
+      pageId: home.id,
+      componentDefinitionId: faq.id,
+      order: 40,
+      enabled: true,
+      instanceKey: "faq_general",
+      props: {
+        title: "Common questions",
+        items: [
+          {
+            question: "Do you store HTML?",
+            answer:
+              "No. We store structure + props and render React on the server.",
+          },
+          {
+            question: "Can I reorder sections?",
+            answer: "Yes. Reordering updates the order column.",
+          },
+        ],
+      },
+    },
+  });
+
+  console.log("Seed complete: themes, components, site settings, home page.");
+}
+
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
