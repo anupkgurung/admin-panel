@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getActiveTheme } from "@/lib/admin/activeTheme";
 import { PageBuilder } from "@/components/admin/PageBuilder";
+import type { ComponentDef } from "@/lib/types/admin";
+import { toPageDTO } from "@/lib/types/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -13,57 +15,37 @@ export default async function AdminPageBuilder({
 }) {
   const activeTheme = await getActiveTheme();
 
-  const page = await prisma.page.findUnique({
-    where: { id: params.pageId },
+  const page = await prisma.page.findFirst({
+    where: { id: params.pageId, themeId: activeTheme.id },
     include: {
       sections: {
         orderBy: { order: "asc" },
-        include: {
-          componentDefinition: {
-            select: { id: true, key: true, name: true, schema: true },
-          },
-        },
+        include: { componentDefinition: true },
       },
     },
   });
 
-  if (!page || page.themeId !== activeTheme.id) {
+  if (!page) {
     notFound();
   }
 
-  const allowedComponents = await prisma.componentDefinition.findMany({
+  const allowedComponentDefs = await prisma.componentDefinition.findMany({
     where: { key: { in: activeTheme.allowedComponents } },
     select: { id: true, key: true, name: true, schema: true },
   });
 
+  const allowedComponents: ComponentDef[] = allowedComponentDefs.map((c) => ({
+    id: c.id,
+    key: c.key,
+    name: c.name,
+    schema: c.schema as object,
+  }));
+
   return (
     <PageBuilder
-      page={{
-        id: page.id,
-        slug: page.slug,
-        title: page.title,
-        status: page.status,
-        sections: page.sections.map((s) => ({
-          id: s.id,
-          order: s.order,
-          enabled: s.enabled,
-          instanceKey: s.instanceKey,
-          props: (s.props ?? {}) as Record<string, unknown>,
-          component: {
-            id: s.componentDefinition.id,
-            key: s.componentDefinition.key,
-            name: s.componentDefinition.name,
-            schema: s.componentDefinition.schema as object,
-          },
-        })),
-      }}
+      page={toPageDTO(page)}
       activeTheme={activeTheme}
-      allowedComponents={allowedComponents.map((c) => ({
-        id: c.id,
-        key: c.key,
-        name: c.name,
-        schema: c.schema as object,
-      }))}
+      allowedComponents={allowedComponents}
     />
   );
 }

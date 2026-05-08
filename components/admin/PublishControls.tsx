@@ -1,27 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-type AllowlistViolation = {
-  sectionId: string;
-  instanceKey: string;
-  componentKey: string;
-};
-
-type PropsViolation = {
-  sectionId: string;
-  instanceKey: string;
-  componentKey: string;
-  errors: { path: string; message: string }[];
-};
-
-type PublishError = {
-  error: string;
-  themeKey?: string;
-  allowlistViolations?: AllowlistViolation[];
-  propViolations?: PropsViolation[];
-};
+import { publishPage, unpublishPage } from "@/lib/admin/actions";
+import type {
+  AllowlistViolation,
+  PropsViolation,
+  PublishError,
+} from "@/lib/types/admin";
 
 export function PublishControls({
   pageId,
@@ -31,43 +18,41 @@ export function PublishControls({
   status: "draft" | "published";
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<PublishError | null>(null);
 
-  async function publish() {
+  function handlePublish() {
     setErr(null);
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/pages/${pageId}/publish`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErr(data as PublishError);
+    startTransition(async () => {
+      const result = await publishPage(pageId);
+      if (!result.ok) {
+        const details = (result.details ?? {}) as {
+          themeKey?: string;
+          allowlistViolations?: AllowlistViolation[];
+          propViolations?: PropsViolation[];
+        };
+        setErr({
+          error: result.code,
+          themeKey: details.themeKey,
+          allowlistViolations: details.allowlistViolations,
+          propViolations: details.propViolations,
+        });
         return;
       }
       router.refresh();
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
-  async function unpublish() {
+  function handleUnpublish() {
     setErr(null);
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/pages/${pageId}/unpublish`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErr(data as PublishError);
+    startTransition(async () => {
+      const result = await unpublishPage(pageId);
+      if (!result.ok) {
+        setErr({ error: result.code });
         return;
       }
       router.refresh();
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
@@ -76,8 +61,8 @@ export function PublishControls({
         {status === "published" ? (
           <button
             type="button"
-            disabled={busy}
-            onClick={unpublish}
+            disabled={pending}
+            onClick={handleUnpublish}
             className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
           >
             Unpublish
@@ -85,8 +70,8 @@ export function PublishControls({
         ) : (
           <button
             type="button"
-            disabled={busy}
-            onClick={publish}
+            disabled={pending}
+            onClick={handlePublish}
             className="rounded bg-green-600 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
           >
             Publish

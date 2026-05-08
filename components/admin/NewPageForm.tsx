@@ -1,39 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+
+import { createPage } from "@/lib/admin/actions";
 
 export function NewPageForm() {
   const router = useRouter();
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setBusy(true);
-    try {
-      const res = await fetch("/api/pages", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ slug, title }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error ?? `Request failed (${res.status})`);
+    startTransition(async () => {
+      const result = await createPage({ slug, title });
+      if (!result.ok) {
+        setError(result.code);
         return;
       }
       setSlug("");
       setTitle("");
-      router.refresh();
-      router.push(`/admin/pages/${data.page.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "unknown_error");
-    } finally {
-      setBusy(false);
-    }
+      router.push(`/admin/pages/${result.data.id}`);
+    });
   }
 
   return (
@@ -54,10 +45,10 @@ export function NewPageForm() {
       />
       <button
         type="submit"
-        disabled={busy}
+        disabled={pending}
         className="col-span-2 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
-        {busy ? "Creating..." : "Create"}
+        {pending ? "Creating..." : "Create"}
       </button>
       {error ? (
         <p className="col-span-12 text-sm text-red-600">{error}</p>

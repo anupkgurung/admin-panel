@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
-import { loadActivePage } from "@/lib/admin/loadActivePage";
+import { getActiveTheme } from "@/lib/admin/activeTheme";
 import {
   findPageSectionsAllowlistViolations,
   findPageSectionsWithInvalidProps,
@@ -17,8 +17,14 @@ export async function POST(
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  const guard = await loadActivePage(params.pageId);
-  if (!guard.ok) return guard.response;
+  const activeTheme = await getActiveTheme();
+  const page = await prisma.page.findFirst({
+    where: { id: params.pageId, themeId: activeTheme.id },
+    select: { id: true },
+  });
+  if (!page) {
+    return NextResponse.json({ error: "page_not_found" }, { status: 404 });
+  }
 
   const allowlistResult = await findPageSectionsAllowlistViolations(
     params.pageId,

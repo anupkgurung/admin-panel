@@ -74,7 +74,7 @@ model PageSection {
   id                    String   @id @default(uuid()) @db.Uuid
   pageId                String   @map("page_id") @db.Uuid
   componentDefinitionId String   @map("component_definition_id") @db.Uuid
-  order                 Int
+  order                 Float
   enabled               Boolean  @default(true)
   instanceKey           String   @map("instance_key")
   props                 Json     @default("{}")

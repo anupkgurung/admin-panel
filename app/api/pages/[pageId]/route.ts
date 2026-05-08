@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
-import { loadActivePage } from "@/lib/admin/loadActivePage";
+import { getActiveTheme } from "@/lib/admin/activeTheme";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +13,10 @@ export async function GET(
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  const guard = await loadActivePage(params.pageId);
-  if (!guard.ok) return guard.response;
+  const activeTheme = await getActiveTheme();
 
-  const page = await prisma.page.findUnique({
-    where: { id: params.pageId },
+  const page = await prisma.page.findFirst({
+    where: { id: params.pageId, themeId: activeTheme.id },
     include: {
       sections: {
         orderBy: { order: "asc" },
@@ -64,9 +64,6 @@ export async function PATCH(
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  const guard = await loadActivePage(params.pageId);
-  if (!guard.ok) return guard.response;
-
   let body: unknown;
   try {
     body = await req.json();
@@ -84,11 +81,21 @@ export async function PATCH(
     return NextResponse.json({ error: "no_fields_to_update" }, { status: 400 });
   }
 
+  const activeTheme = await getActiveTheme();
+
+  const page = await prisma.page.findFirst({
+    where: { id: params.pageId, themeId: activeTheme.id },
+    select: { id: true, themeId: true },
+  });
+  if (!page) {
+    return NextResponse.json({ error: "page_not_found" }, { status: 404 });
+  }
+
   if (data.slug) {
     const existing = await prisma.page.findFirst({
       where: {
         slug: data.slug,
-        themeId: guard.page.themeId,
+        themeId: page.themeId,
         NOT: { id: params.pageId },
       },
       select: { id: true },
@@ -101,14 +108,10 @@ export async function PATCH(
     }
   }
 
-  try {
-    const updated = await prisma.page.update({
-      where: { id: params.pageId },
-      data,
-      select: { id: true, slug: true, title: true, status: true },
-    });
-    return NextResponse.json({ page: updated });
-  } catch (e) {
-    return NextResponse.json({ error: "page_not_found" }, { status: 404 });
-  }
+  const updated = await prisma.page.update({
+    where: { id: params.pageId },
+    data,
+    select: { id: true, slug: true, title: true, status: true },
+  });
+  return NextResponse.json({ page: updated });
 }

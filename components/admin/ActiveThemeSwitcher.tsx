@@ -1,58 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-type Theme = {
-  id: string;
-  key: string;
-  name: string;
-  allowedComponents: string[];
-};
-
-type Violation = {
-  pageId: string;
-  pageSlug: string;
-  pageTitle: string;
-  sectionId: string;
-  instanceKey: string;
-  componentKey: string;
-};
+import { setActiveTheme } from "@/lib/admin/actions";
+import type { AllowlistViolation, ThemeDTO } from "@/lib/types/admin";
 
 export function ActiveThemeSwitcher({
   current,
   themes,
 }: {
-  current: Theme;
-  themes: Theme[];
+  current: ThemeDTO;
+  themes: ThemeDTO[];
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [violations, setViolations] = useState<Violation[]>([]);
+  const [violations, setViolations] = useState<AllowlistViolation[]>([]);
 
-  async function switchTo(themeKey: string) {
+  function switchTo(themeKey: string) {
     if (themeKey === current.key) return;
     setError(null);
     setViolations([]);
-    setBusy(true);
-    try {
-      const res = await fetch("/api/site/active-theme", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ themeKey }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? `Request failed (${res.status})`);
-        if (Array.isArray(data.violations))
-          setViolations(data.violations as Violation[]);
+    startTransition(async () => {
+      const result = await setActiveTheme(themeKey);
+      if (!result.ok) {
+        setError(result.code);
+        const details = (result.details ?? {}) as {
+          violations?: AllowlistViolation[];
+        };
+        if (Array.isArray(details.violations)) {
+          setViolations(details.violations);
+        }
         return;
       }
       router.refresh();
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
@@ -68,7 +51,7 @@ export function ActiveThemeSwitcher({
         {themes.map((t) => (
           <button
             key={t.key}
-            disabled={busy || t.key === current.key}
+            disabled={pending || t.key === current.key}
             onClick={() => switchTo(t.key)}
             className={
               t.key === current.key

@@ -6,37 +6,18 @@ import { useRouter } from "next/navigation";
 
 import { SchemaForm, type JSONSchema } from "./SchemaForm";
 import { PublishControls } from "./PublishControls";
-
-type ComponentDef = {
-  id: string;
-  key: string;
-  name: string;
-  schema: object;
-};
-
-type SectionDTO = {
-  id: string;
-  order: number;
-  enabled: boolean;
-  instanceKey: string;
-  props: Record<string, unknown>;
-  component: ComponentDef;
-};
-
-type PageDTO = {
-  id: string;
-  slug: string;
-  title: string;
-  status: "draft" | "published";
-  sections: SectionDTO[];
-};
-
-type ActiveTheme = {
-  id: string;
-  key: string;
-  name: string;
-  allowedComponents: string[];
-};
+import {
+  addSection,
+  deleteSection,
+  reorderSection,
+  updateSection,
+} from "@/lib/admin/actions";
+import type {
+  ActiveThemeDTO,
+  ComponentDef,
+  PageDTO,
+  SectionDTO,
+} from "@/lib/types/admin";
 
 export function PageBuilder({
   page,
@@ -44,7 +25,7 @@ export function PageBuilder({
   allowedComponents,
 }: {
   page: PageDTO;
-  activeTheme: ActiveTheme;
+  activeTheme: ActiveThemeDTO;
   allowedComponents: ComponentDef[];
 }) {
   const router = useRouter();
@@ -59,99 +40,66 @@ export function PageBuilder({
     [page.sections],
   );
 
-  function call(
-    url: string,
-    init?: RequestInit,
-  ): Promise<{ ok: boolean; status: number; data: unknown }> {
-    return fetch(url, init).then(async (res) => ({
-      ok: res.ok,
-      status: res.status,
-      data: await res.json().catch(() => null),
-    }));
-  }
-
-  async function refresh() {
-    startTransition(() => {
+  function handleAddSection(componentKey: string) {
+    setError(null);
+    startTransition(async () => {
+      const result = await addSection(page.id, componentKey);
+      if (!result.ok) {
+        setError(formatActionError(result.code, result.details));
+        return;
+      }
       router.refresh();
     });
   }
 
-  async function addSection(componentKey: string) {
+  function handleDeleteSection(sectionId: string) {
     setError(null);
-    const res = await call(`/api/pages/${page.id}/sections`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ componentKey }),
+    startTransition(async () => {
+      const result = await deleteSection(sectionId);
+      if (!result.ok) {
+        setError(formatActionError(result.code, result.details));
+        return;
+      }
+      router.refresh();
     });
-    if (!res.ok) {
-      setError(formatError(res.data, res.status));
-      return;
-    }
-    refresh();
   }
 
-  async function deleteSection(sectionId: string) {
+  function handleToggleSection(sectionId: string, enabled: boolean) {
     setError(null);
-    const res = await call(`/api/sections/${sectionId}`, { method: "DELETE" });
-    if (!res.ok) {
-      setError(formatError(res.data, res.status));
-      return;
-    }
-    refresh();
+    startTransition(async () => {
+      const result = await updateSection(sectionId, { enabled });
+      if (!result.ok) {
+        setError(formatActionError(result.code, result.details));
+        return;
+      }
+      router.refresh();
+    });
   }
 
-  async function toggleSection(sectionId: string, enabled: boolean) {
+  function handleMoveSection(sectionId: string, direction: -1 | 1) {
     setError(null);
-    const res = await call(`/api/sections/${sectionId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ enabled }),
+    startTransition(async () => {
+      const result = await reorderSection(page.id, sectionId, direction);
+      if (!result.ok) {
+        setError(formatActionError(result.code, result.details));
+        return;
+      }
+      router.refresh();
     });
-    if (!res.ok) {
-      setError(formatError(res.data, res.status));
-      return;
-    }
-    refresh();
   }
 
-  async function moveSection(sectionId: string, direction: -1 | 1) {
+  function handleSaveProps(sectionId: string, props: unknown) {
     setError(null);
-    const idx = sortedSections.findIndex((s) => s.id === sectionId);
-    if (idx === -1) return;
-    const swapWith = idx + direction;
-    if (swapWith < 0 || swapWith >= sortedSections.length) return;
-
-    const a = sortedSections[idx];
-    const b = sortedSections[swapWith];
-    const ordering = [
-      { id: a.id, order: b.order },
-      { id: b.id, order: a.order },
-    ];
-
-    const res = await call(`/api/pages/${page.id}/sections/reorder`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ordering }),
+    startTransition(async () => {
+      const result = await updateSection(sectionId, {
+        props: props as Record<string, unknown>,
+      });
+      if (!result.ok) {
+        setError(formatActionError(result.code, result.details));
+        return;
+      }
+      router.refresh();
     });
-    if (!res.ok) {
-      setError(formatError(res.data, res.status));
-      return;
-    }
-    refresh();
-  }
-
-  async function saveProps(sectionId: string, props: unknown) {
-    setError(null);
-    const res = await call(`/api/sections/${sectionId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ props }),
-    });
-    if (!res.ok) {
-      setError(formatError(res.data, res.status));
-      return;
-    }
-    refresh();
   }
 
   return (
@@ -212,7 +160,7 @@ export function PageBuilder({
               <button
                 key={c.key}
                 disabled={busy}
-                onClick={() => addSection(c.key)}
+                onClick={() => handleAddSection(c.key)}
                 className="rounded border bg-gray-50 px-3 py-1 text-sm hover:bg-gray-100 disabled:opacity-50"
               >
                 + {c.name} ({c.key})
@@ -239,10 +187,10 @@ export function PageBuilder({
               onToggleOpen={() =>
                 setOpenSectionId(openSectionId === s.id ? null : s.id)
               }
-              onMove={moveSection}
-              onDelete={deleteSection}
-              onToggle={toggleSection}
-              onSaveProps={saveProps}
+              onMove={handleMoveSection}
+              onDelete={handleDeleteSection}
+              onToggle={handleToggleSection}
+              onSaveProps={handleSaveProps}
               busy={busy}
             />
           ))
@@ -371,19 +319,19 @@ function SectionEditor({
   );
 }
 
-function formatError(data: unknown, status: number): string {
-  if (data && typeof data === "object" && "error" in data) {
-    const obj = data as {
-      error: string;
-      errors?: { path: string; message: string }[];
-    };
-    if (Array.isArray(obj.errors) && obj.errors.length > 0) {
-      const detail = obj.errors
-        .map((e) => `${e.path || "/"}: ${e.message}`)
-        .join("; ");
-      return `${obj.error} (HTTP ${status}) - ${detail}`;
-    }
-    return `${obj.error} (HTTP ${status})`;
+function formatActionError(code: string, details: unknown): string {
+  if (
+    details &&
+    typeof details === "object" &&
+    "errors" in details &&
+    Array.isArray((details as { errors?: unknown }).errors)
+  ) {
+    const errors = (details as { errors: { path: string; message: string }[] })
+      .errors;
+    const detail = errors
+      .map((e) => `${e.path || "/"}: ${e.message}`)
+      .join("; ");
+    return `${code} - ${detail}`;
   }
-  return `Request failed (HTTP ${status})`;
+  return code;
 }

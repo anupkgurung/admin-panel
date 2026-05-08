@@ -2,15 +2,10 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { getAllowedComponents } from "@/lib/registry";
 import { findThemeSectionsViolatingAllowlist } from "@/lib/admin/publishGuards";
 
 export const dynamic = "force-dynamic";
-
-function asAllowlist(raw: unknown): string[] {
-  return Array.isArray(raw)
-    ? (raw as unknown[]).filter((v): v is string => typeof v === "string")
-    : [];
-}
 
 export async function GET() {
   const unauth = await requireAdmin();
@@ -33,7 +28,7 @@ export async function GET() {
       key: settings.activeTheme.key,
       name: settings.activeTheme.name,
       tokens: settings.activeTheme.tokens,
-      allowedComponents: asAllowlist(settings.activeTheme.allowedComponents),
+      allowedComponents: getAllowedComponents(settings.activeTheme.key),
     },
   });
 }
@@ -62,7 +57,6 @@ export async function PATCH(req: Request) {
     );
   }
 
-  const newAllowed = asAllowlist(theme.allowedComponents);
   const violations = await findThemeSectionsViolatingAllowlist(theme.id);
 
   if (violations.length > 0) {
@@ -95,7 +89,7 @@ export async function PATCH(req: Request) {
       key: theme.key,
       name: theme.name,
       tokens: theme.tokens,
-      allowedComponents: newAllowed,
+      allowedComponents: getAllowedComponents(theme.key),
     },
   });
 }

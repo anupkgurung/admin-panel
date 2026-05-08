@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getAllowedComponents } from "@/lib/registry";
 
 export type ActiveTheme = {
   id: string;
@@ -16,15 +17,10 @@ export async function getActiveTheme(): Promise<ActiveTheme> {
     throw new Error("Site settings not initialized");
   }
 
-  const allowedRaw = settings.activeTheme.allowedComponents;
-  const allowedComponents = Array.isArray(allowedRaw)
-    ? (allowedRaw as unknown[]).filter((v): v is string => typeof v === "string")
-    : [];
-
   return {
     id: settings.activeTheme.id,
     key: settings.activeTheme.key,
     name: settings.activeTheme.name,
-    allowedComponents,
+    allowedComponents: getAllowedComponents(settings.activeTheme.key),
   };
 }

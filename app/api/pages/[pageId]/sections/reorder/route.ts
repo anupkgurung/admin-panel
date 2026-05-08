@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
+
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
-import { loadActivePage } from "@/lib/admin/loadActivePage";
+import { getActiveTheme } from "@/lib/admin/activeTheme";
+import { computeReorderTargetOrder } from "@/lib/admin/reorder";
 
 export const dynamic = "force-dynamic";
-
-type ReorderItem = { id: string; order: number };
 
 export async function POST(
   req: Request,
@@ -14,9 +14,6 @@ export async function POST(
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  const guard = await loadActivePage(params.pageId);
-  if (!guard.ok) return guard.response;
-
   let body: unknown;
   try {
     body = await req.json();
@@ -24,51 +21,56 @@ export async function POST(
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const ordering = (body as { ordering?: ReorderItem[] } | null)?.ordering;
+  const { sectionId, direction } = (body ?? {}) as {
+    sectionId?: string;
+    direction?: number;
+  };
 
-  if (!Array.isArray(ordering) || ordering.length === 0) {
+  if (!sectionId || typeof sectionId !== "string") {
     return NextResponse.json(
-      { error: "ordering_required" },
+      { error: "section_id_required" },
       { status: 400 },
     );
   }
 
-  const validItems = ordering.filter(
-    (i): i is ReorderItem =>
-      i &&
-      typeof i.id === "string" &&
-      typeof i.order === "number" &&
-      Number.isFinite(i.order),
-  );
-
-  if (validItems.length !== ordering.length) {
+  if (direction !== -1 && direction !== 1) {
     return NextResponse.json(
-      { error: "invalid_ordering_items" },
+      { error: "invalid_direction" },
       { status: 400 },
     );
   }
 
-  const sectionIds = validItems.map((i) => i.id);
-  const matched = await prisma.pageSection.findMany({
-    where: { id: { in: sectionIds }, pageId: params.pageId },
-    select: { id: true },
+  const activeTheme = await getActiveTheme();
+
+  const section = await prisma.pageSection.findFirst({
+    where: {
+      id: sectionId,
+      pageId: params.pageId,
+      page: { themeId: activeTheme.id },
+    },
+    select: { id: true, order: true },
   });
-
-  if (matched.length !== sectionIds.length) {
+  if (!section) {
     return NextResponse.json(
       { error: "section_not_found_for_page" },
-      { status: 400 },
+      { status: 404 },
     );
   }
 
-  await prisma.$transaction(
-    validItems.map((item) =>
-      prisma.pageSection.update({
-        where: { id: item.id },
-        data: { order: item.order },
-      }),
-    ),
-  );
+  const target = await computeReorderTargetOrder({
+    pageId: params.pageId,
+    currentOrder: section.order,
+    direction: direction as -1 | 1,
+  });
+  if (target === null) {
+    // Already at edge in that direction; no-op.
+    return NextResponse.json({ ok: true, noop: true });
+  }
 
-  return NextResponse.json({ ok: true, count: validItems.length });
+  await prisma.pageSection.update({
+    where: { id: sectionId },
+    data: { order: target },
+  });
+
+  return NextResponse.json({ ok: true, order: target });
 }

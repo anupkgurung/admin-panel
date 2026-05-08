@@ -2,16 +2,11 @@ import Link from "next/link";
 
 import { prisma } from "@/lib/db";
 import { getActiveTheme } from "@/lib/admin/activeTheme";
+import { getAllowedComponents } from "@/lib/registry";
 import { NewPageForm } from "@/components/admin/NewPageForm";
 import { ActiveThemeSwitcher } from "@/components/admin/ActiveThemeSwitcher";
 
 export const dynamic = "force-dynamic";
-
-function asAllowlist(raw: unknown): string[] {
-  return Array.isArray(raw)
-    ? (raw as unknown[]).filter((v): v is string => typeof v === "string")
-    : [];
-}
 
 export default async function AdminPagesIndex() {
   const activeTheme = await getActiveTheme();
@@ -30,7 +25,7 @@ export default async function AdminPagesIndex() {
     }),
     prisma.theme.findMany({
       orderBy: { key: "asc" },
-      select: { id: true, key: true, name: true, allowedComponents: true },
+      select: { id: true, key: true, name: true },
     }),
   ]);
 
@@ -38,7 +33,7 @@ export default async function AdminPagesIndex() {
     id: t.id,
     key: t.key,
     name: t.name,
-    allowedComponents: asAllowlist(t.allowedComponents),
+    allowedComponents: getAllowedComponents(t.key),
   }));
 
   const current = themes.find((t) => t.key === activeTheme.key) ?? {
