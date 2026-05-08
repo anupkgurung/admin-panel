@@ -6,14 +6,29 @@ import { createContext, useContext, useMemo } from "react";
 /** Optional per-section presentation hints driven by theme tokens (not duplicate React files). */
 export type SectionUiTokens = {
   hero?: {
-    headlinePreset?: "prominent" | "subtle";
+    headlinePreset?: "prominent" | "subtle" | "dramatic";
     container?: "wide" | "narrow";
     ctaVariant?: "filled" | "outline";
     sectionBorderBottom?: boolean;
+    /** When `primary-band`, hero sits on a strong tinted strip (used by bold theme only). */
+    surface?: "default" | "primary-band";
   };
   faq?: {
-    presentation?: "cards" | "minimal-list";
+    presentation?: "cards" | "minimal-list" | "accent-strip";
     titlePreset?: "bold" | "minimal";
+  };
+  /**
+   * Optional overrides for marketing sections; omit entirely so modern/minimal
+   * keep their existing visuals (defaults branch inside components).
+   */
+  marketing?: {
+    navBar?: "default" | "bold-strip";
+    featureGrid?: "default" | "lifted";
+    ctaBanner?: "default" | "inverse-band";
+    testimonials?: "default" | "emphasis";
+    pricing?: "default" | "striking";
+    logosStrip?: "default" | "dark-band";
+    footer?: "default" | "inverted-band";
   };
 };
 

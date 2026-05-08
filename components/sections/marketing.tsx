@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { useSiteTheme } from "@/lib/theme/ThemeProvider";
+
 const sectionY = {
   paddingTop: "var(--spacing-section-y)",
   paddingBottom: "var(--spacing-section-y)",
@@ -11,6 +13,10 @@ const subtleBorder = "rgba(0,0,0,0.08)";
 
 /** nav_header */
 export function NavHeader(props: Record<string, unknown>) {
+  const { tokens } = useSiteTheme();
+  const navBar = tokens.sectionUi?.marketing?.navBar ?? "default";
+  const boldStrip = navBar === "bold-strip";
+
   const variant =
     (props.variant as string | undefined) ?? "simple";
   const logo = props.logo as { text: string; href: string };
@@ -71,10 +77,14 @@ export function NavHeader(props: Record<string, unknown>) {
 
   return (
     <header
-      className={`border-b ${sticky ? "sticky top-0 z-40 backdrop-blur-sm" : ""}`}
+      className={`${boldStrip ? "border-b-[4px]" : "border-b"} ${sticky ? "sticky top-0 z-40 backdrop-blur-sm" : ""}`}
       style={{
-        borderColor: subtleBorder,
-        backgroundColor: sticky ? "color-mix(in srgb, var(--color-bg) 92%, transparent)" : "var(--color-bg)",
+        borderColor: boldStrip ? "var(--color-primary)" : subtleBorder,
+        backgroundColor: boldStrip
+          ? "color-mix(in srgb, var(--color-primary) 16%, var(--color-bg))"
+          : sticky
+            ? "color-mix(in srgb, var(--color-bg) 92%, transparent)"
+            : "var(--color-bg)",
       }}
     >
       <div className="mx-auto max-w-6xl px-6 py-4">
@@ -134,6 +144,10 @@ export function NavHeader(props: Record<string, unknown>) {
 
 /** feature_grid */
 export function FeatureGrid(props: Record<string, unknown>) {
+  const { tokens } = useSiteTheme();
+  const gridVariant = tokens.sectionUi?.marketing?.featureGrid ?? "default";
+  const lifted = gridVariant === "lifted";
+
   const title = (props.title as string | undefined) ?? "Features";
   const subtitle = props.subtitle as string | undefined;
   const columns = typeof props.columns === "number" ? props.columns : 3;
@@ -167,10 +181,16 @@ export function FeatureGrid(props: Record<string, unknown>) {
           {items.map((item, idx) => (
             <div
               key={idx}
-              className="rounded-lg border p-5"
+              className={`rounded-lg border p-5 ${lifted ? "shadow-xl" : ""}`}
               style={{
-                borderColor: subtleBorder,
+                borderColor: lifted
+                  ? "color-mix(in srgb, var(--color-primary) 45%, transparent)"
+                  : subtleBorder,
                 borderRadius: "var(--radius-md)",
+                borderWidth: lifted ? 2 : 1,
+                boxShadow: lifted
+                  ? "0 18px 40px color-mix(in srgb, var(--color-text) 12%, transparent)"
+                  : undefined,
               }}
             >
               {item.icon ? (
@@ -194,6 +214,10 @@ export function FeatureGrid(props: Record<string, unknown>) {
 
 /** cta_banner */
 export function CtaBanner(props: Record<string, unknown>) {
+  const { tokens } = useSiteTheme();
+  const ctaMode = tokens.sectionUi?.marketing?.ctaBanner ?? "default";
+  const inverseBand = ctaMode === "inverse-band";
+
   const headline = props.headline as string;
   const subheadline = props.subheadline as string | undefined;
   const align = (props.align as string | undefined) ?? "center";
@@ -204,25 +228,48 @@ export function CtaBanner(props: Record<string, unknown>) {
 
   const alignClass = align === "left" ? "text-left" : "text-center mx-auto";
 
+  const headingColor = inverseBand ? "#ffffff" : "var(--color-text)";
+  const mutedColor = inverseBand ? "rgba(255,255,255,0.82)" : "var(--color-muted)";
+
   return (
-    <section className="px-6" style={sectionY}>
+    <section
+      className="px-6"
+      style={{
+        ...sectionY,
+        ...(inverseBand
+          ? {
+              backgroundColor: "var(--color-primary)",
+              color: "#ffffff",
+            }
+          : {}),
+      }}
+    >
       <div className={`mx-auto max-w-4xl ${alignClass}`}>
-        <h2 className="text-3xl font-semibold tracking-tight" style={{ color: "var(--color-text)" }}>
+        <h2 className="text-3xl font-semibold tracking-tight" style={{ color: headingColor }}>
           {headline}
         </h2>
         {subheadline ? (
-          <p className="mt-3 text-lg" style={{ color: "var(--color-muted)" }}>
+          <p className="mt-3 text-lg" style={{ color: mutedColor }}>
             {subheadline}
           </p>
         ) : null}
         <div className={`mt-8 flex flex-wrap gap-4 ${align === "center" ? "justify-center" : ""}`}>
           <a
             href={primaryCta.href}
-            className="inline-block px-6 py-3 text-sm font-semibold text-white"
-            style={{
-              backgroundColor: "var(--color-primary)",
-              borderRadius: "var(--radius-md)",
-            }}
+            className="inline-block px-6 py-3 text-sm font-semibold"
+            style={
+              inverseBand
+                ? {
+                    backgroundColor: "#ffffff",
+                    color: "var(--color-primary)",
+                    borderRadius: "var(--radius-md)",
+                  }
+                : {
+                    backgroundColor: "var(--color-primary)",
+                    color: "#ffffff",
+                    borderRadius: "var(--radius-md)",
+                  }
+            }
           >
             {primaryCta.label}
           </a>
@@ -230,11 +277,19 @@ export function CtaBanner(props: Record<string, unknown>) {
             <a
               href={secondaryCta.href}
               className="inline-block border px-6 py-3 text-sm font-medium"
-              style={{
-                borderColor: "var(--color-text)",
-                color: "var(--color-text)",
-                borderRadius: "var(--radius-sm)",
-              }}
+              style={
+                inverseBand
+                  ? {
+                      borderColor: "rgba(255,255,255,0.65)",
+                      color: "#ffffff",
+                      borderRadius: "var(--radius-sm)",
+                    }
+                  : {
+                      borderColor: "var(--color-text)",
+                      color: "var(--color-text)",
+                      borderRadius: "var(--radius-sm)",
+                    }
+              }
             >
               {secondaryCta.label}
             </a>
@@ -247,6 +302,10 @@ export function CtaBanner(props: Record<string, unknown>) {
 
 /** testimonials — layout "carousel" rendered as horizontal scroll strip */
 export function Testimonials(props: Record<string, unknown>) {
+  const { tokens } = useSiteTheme();
+  const testimonialUi = tokens.sectionUi?.marketing?.testimonials ?? "default";
+  const emphasis = testimonialUi === "emphasis";
+
   const title = (props.title as string | undefined) ?? "What customers say";
   const layout = (props.layout as string | undefined) ?? "cards";
   const items = (props.items ?? []) as Array<{
@@ -268,8 +327,14 @@ export function Testimonials(props: Record<string, unknown>) {
             {items.map((item, idx) => (
               <blockquote
                 key={idx}
-                className="min-w-[280px] shrink-0 rounded-lg border p-5"
-                style={{ borderColor: subtleBorder, borderRadius: "var(--radius-md)" }}
+                className={`min-w-[280px] shrink-0 rounded-lg border p-5 ${emphasis ? "shadow-lg" : ""}`}
+                style={{
+                  borderColor: emphasis
+                    ? "color-mix(in srgb, var(--color-primary) 55%, transparent)"
+                    : subtleBorder,
+                  borderRadius: "var(--radius-md)",
+                  borderWidth: emphasis ? 2 : 1,
+                }}
               >
                 <p className="text-sm leading-relaxed" style={{ color: "var(--color-text)" }}>
                   “{item.quote}”
@@ -297,8 +362,14 @@ export function Testimonials(props: Record<string, unknown>) {
           {items.map((item, idx) => (
             <blockquote
               key={idx}
-              className="rounded-lg border p-5"
-              style={{ borderColor: subtleBorder, borderRadius: "var(--radius-md)" }}
+              className={`rounded-lg border p-5 ${emphasis ? "shadow-lg" : ""}`}
+              style={{
+                borderColor: emphasis
+                  ? "color-mix(in srgb, var(--color-primary) 55%, transparent)"
+                  : subtleBorder,
+                borderRadius: "var(--radius-md)",
+                borderWidth: emphasis ? 2 : 1,
+              }}
             >
               <p className="text-sm leading-relaxed" style={{ color: "var(--color-text)" }}>
                 “{item.quote}”
@@ -318,6 +389,10 @@ export function Testimonials(props: Record<string, unknown>) {
 
 /** pricing_table */
 export function PricingTable(props: Record<string, unknown>) {
+  const { tokens } = useSiteTheme();
+  const pricingUi = tokens.sectionUi?.marketing?.pricing ?? "default";
+  const striking = pricingUi === "striking";
+
   const title = (props.title as string | undefined) ?? "Pricing";
   const subtitle = props.subtitle as string | undefined;
   const billingNote = props.billingNote as string | undefined;
@@ -350,11 +425,17 @@ export function PricingTable(props: Record<string, unknown>) {
           {plans.map((plan, idx) => (
             <div
               key={idx}
-              className="flex flex-col rounded-lg border p-6"
+              className={`flex flex-col rounded-lg border p-6 transition-transform ${striking && plan.highlighted ? "shadow-2xl md:scale-[1.02]" : ""}`}
               style={{
                 borderColor: plan.highlighted ? "var(--color-primary)" : subtleBorder,
                 borderRadius: "var(--radius-md)",
-                borderWidth: plan.highlighted ? 2 : 1,
+                borderWidth: plan.highlighted ? (striking ? 3 : 2) : 1,
+                ...(striking && plan.highlighted
+                  ? {
+                      boxShadow:
+                        "0 22px 45px color-mix(in srgb, var(--color-primary) 28%, transparent)",
+                    }
+                  : {}),
               }}
             >
               <h3 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
@@ -393,6 +474,10 @@ export function PricingTable(props: Record<string, unknown>) {
 
 /** logos_strip */
 export function LogosStrip(props: Record<string, unknown>) {
+  const { tokens } = useSiteTheme();
+  const logosUi = tokens.sectionUi?.marketing?.logosStrip ?? "default";
+  const darkBand = logosUi === "dark-band";
+
   const title = (props.title as string | undefined) ?? "Trusted by";
   const grayscale = props.grayscale !== false;
   const logos = (props.logos ?? []) as Array<{ name: string; src: string; href?: string }>;
@@ -403,14 +488,28 @@ export function LogosStrip(props: Record<string, unknown>) {
     <img
       src={logo.src}
       alt={logo.name}
-      className={`h-8 max-w-[120px] object-contain ${grayscale ? "grayscale opacity-70" : ""}`}
+      className={`h-8 max-w-[120px] object-contain ${darkBand ? "" : grayscale ? "grayscale opacity-70" : ""}`}
+      style={
+        darkBand
+          ? { filter: grayscale ? "grayscale(1) brightness(0) invert(1)" : "brightness(0) invert(1)", opacity: 0.92 }
+          : undefined
+      }
     />
   );
 
   return (
-    <section className="border-y px-6 py-10" style={{ borderColor: subtleBorder }}>
+    <section
+      className={`border-y px-6 py-10`}
+      style={{
+        borderColor: darkBand ? "transparent" : subtleBorder,
+        backgroundColor: darkBand ? "var(--color-primary)" : undefined,
+      }}
+    >
       <div className="mx-auto max-w-6xl">
-        <p className="text-center text-sm font-medium uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+        <p
+          className="text-center text-sm font-medium uppercase tracking-wide"
+          style={{ color: darkBand ? "rgba(255,255,255,0.82)" : "var(--color-muted)" }}
+        >
           {title}
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-10">
@@ -433,6 +532,10 @@ export function LogosStrip(props: Record<string, unknown>) {
 
 /** footer */
 export function Footer(props: Record<string, unknown>) {
+  const { tokens } = useSiteTheme();
+  const footerUi = tokens.sectionUi?.marketing?.footer ?? "default";
+  const invertedBand = footerUi === "inverted-band";
+
   const brand = props.brand as { name: string; description?: string };
   const linkGroups = (props.linkGroups ?? []) as Array<{
     title: string;
@@ -441,15 +544,25 @@ export function Footer(props: Record<string, unknown>) {
   const socialLinks = (props.socialLinks ?? []) as Array<{ platform: string; href: string }>;
   const copyrightText = props.copyrightText as string | undefined;
 
+  const labelMuted = invertedBand ? "rgba(255,255,255,0.75)" : "var(--color-muted)";
+  const labelStrong = invertedBand ? "#ffffff" : "var(--color-text)";
+
   return (
-    <footer className="border-t px-6 py-12" style={{ borderColor: subtleBorder }}>
+    <footer
+      className="border-t px-6 py-12"
+      style={{
+        borderColor: invertedBand ? "transparent" : subtleBorder,
+        backgroundColor: invertedBand ? "color-mix(in srgb, var(--color-primary) 92%, black)" : undefined,
+        color: invertedBand ? "#ffffff" : undefined,
+      }}
+    >
       <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-12">
         <div className="md:col-span-4">
-          <p className="font-semibold" style={{ color: "var(--color-text)" }}>
+          <p className="font-semibold" style={{ color: labelStrong }}>
             {brand.name}
           </p>
           {brand.description ? (
-            <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: labelMuted }}>
               {brand.description}
             </p>
           ) : null}
@@ -457,13 +570,13 @@ export function Footer(props: Record<string, unknown>) {
         <div className="grid gap-8 sm:grid-cols-2 md:col-span-8 md:grid-cols-3">
           {linkGroups.map((group, i) => (
             <div key={i}>
-              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: labelMuted }}>
                 {group.title}
               </p>
               <ul className="mt-3 space-y-2">
                 {group.links.map((link, j) => (
                   <li key={j}>
-                    <a href={link.href} className="text-sm hover:underline" style={{ color: "var(--color-text)" }}>
+                    <a href={link.href} className="text-sm hover:underline" style={{ color: labelStrong }}>
                       {link.label}
                     </a>
                   </li>
@@ -476,14 +589,14 @@ export function Footer(props: Record<string, unknown>) {
       {socialLinks.length > 0 ? (
         <div className="mx-auto mt-10 flex max-w-6xl flex-wrap gap-4">
           {socialLinks.map((s, i) => (
-            <a key={i} href={s.href} className="text-sm" style={{ color: "var(--color-muted)" }}>
+            <a key={i} href={s.href} className="text-sm" style={{ color: labelMuted }}>
               {s.platform}
             </a>
           ))}
         </div>
       ) : null}
       {copyrightText ? (
-        <p className="mx-auto mt-8 max-w-6xl text-center text-xs" style={{ color: "var(--color-muted)" }}>
+        <p className="mx-auto mt-8 max-w-6xl text-center text-xs" style={{ color: labelMuted }}>
           {copyrightText}
         </p>
       ) : null}

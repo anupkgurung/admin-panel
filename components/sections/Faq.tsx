@@ -16,6 +16,15 @@ export function Faq({ title = "FAQs", items }: FaqProps) {
       ? "text-xl font-light uppercase tracking-widest"
       : "text-2xl font-semibold tracking-tight";
 
+  const accentBorderLeft =
+    presentation === "accent-strip"
+      ? {
+          borderLeftWidth: 4,
+          borderLeftStyle: "solid" as const,
+          borderLeftColor: "var(--color-primary)",
+        }
+      : {};
+
   return (
     <section
       className="px-6"
@@ -50,6 +59,30 @@ export function Faq({ title = "FAQs", items }: FaqProps) {
               </li>
             ))}
           </ul>
+        ) : presentation === "accent-strip" ? (
+          <dl className="mt-6 space-y-4">
+            {items.map((item, idx) => (
+              <div
+                key={idx}
+                className="border p-4 shadow-md"
+                style={{
+                  ...accentBorderLeft,
+                  borderRadius: "var(--radius-md)",
+                  borderColor: "rgba(0,0,0,0.06)",
+                }}
+              >
+                <dt
+                  className="text-base font-bold"
+                  style={{ color: "var(--color-text)" }}
+                >
+                  {item.question}
+                </dt>
+                <dd className="mt-2 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
+                  {item.answer}
+                </dd>
+              </div>
+            ))}
+          </dl>
         ) : (
           <dl className="mt-6 space-y-3">
             {items.map((item, idx) => (
