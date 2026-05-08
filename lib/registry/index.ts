@@ -1,51 +1,66 @@
 import type { ComponentType } from "react";
 import { componentDefinitionKeys } from "@/components/themes/_definitions";
 
-import { Hero as ModernHero } from "@/components/themes/modern/Hero";
-import { Faq as ModernFaq } from "@/components/themes/modern/Faq";
-import { Hero as MinimalHero } from "@/components/themes/minimal/Hero";
-import { Faq as MinimalFaq } from "@/components/themes/minimal/Faq";
+import { Hero as SharedHero } from "@/components/sections/Hero";
+import { Faq as SharedFaq } from "@/components/sections/Faq";
+import {
+  CtaBanner,
+  FeatureGrid,
+  Footer,
+  LogosStrip,
+  NavHeader,
+  PricingTable,
+  Testimonials,
+} from "@/components/sections/marketing";
 
 export type SectionComponent = ComponentType<Record<string, unknown>>;
 
-export type ComponentRegistry = Record<
-  string,
-  Record<string, SectionComponent>
->;
-
-export const registry: ComponentRegistry = {
-  modern: {
-    hero: ModernHero as unknown as SectionComponent,
-    faq: ModernFaq as unknown as SectionComponent,
-  },
-  minimal: {
-    hero: MinimalHero as unknown as SectionComponent,
-    faq: MinimalFaq as unknown as SectionComponent,
-  },
+/** Default renderers keyed by `component_definitions.key` — shared across themes. */
+export const sharedRegistry: Record<string, SectionComponent> = {
+  hero: SharedHero as unknown as SectionComponent,
+  faq: SharedFaq as unknown as SectionComponent,
+  nav_header: NavHeader as unknown as SectionComponent,
+  feature_grid: FeatureGrid as unknown as SectionComponent,
+  cta_banner: CtaBanner as unknown as SectionComponent,
+  testimonials: Testimonials as unknown as SectionComponent,
+  pricing_table: PricingTable as unknown as SectionComponent,
+  logos_strip: LogosStrip as unknown as SectionComponent,
+  footer: Footer as unknown as SectionComponent,
 };
+
+/**
+ * Optional per-theme overrides when a section truly needs different React
+ * behavior (not just tokens). Prefer `ThemeTokens.sectionUi` first.
+ */
+export const themeOverrides: Record<
+  string,
+  Partial<Record<string, SectionComponent>>
+> = {};
+
+/** Themes we resolve sections for (matches DB `themes.key`). */
+export const registeredThemeKeys = ["modern", "minimal"] as const;
+
+export type RegisteredThemeKey = (typeof registeredThemeKeys)[number];
 
 export function resolveComponent(
   themeKey: string,
   componentKey: string,
 ): SectionComponent | undefined {
-  return registry[themeKey]?.[componentKey];
+  const override = themeOverrides[themeKey]?.[componentKey];
+  if (override) return override;
+  return sharedRegistry[componentKey];
 }
 
 /**
- * Returns the component keys a theme is allowed to use, derived from the
- * in-code registry. This is the single source of truth for the theme
- * allowlist; the DB column `themes.allowed_components` is unused.
+ * Allowed component keys for admin/theme guards — aligned with DB catalog.
  */
 export function getAllowedComponents(themeKey: string): string[] {
-  // Theme-specific render registry may be ahead/behind the DB component catalog.
-  // For now every theme shares the same definition catalog and implementations
-  // can be added incrementally without blocking DB insertion.
-  if (!registry[themeKey]) {
+  if (!registeredThemeKeys.includes(themeKey as RegisteredThemeKey)) {
     return [];
   }
   return componentDefinitionKeys;
 }
 
 export function getAllThemeKeys(): string[] {
-  return Object.keys(registry);
+  return [...registeredThemeKeys];
 }

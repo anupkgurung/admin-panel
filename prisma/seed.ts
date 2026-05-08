@@ -18,6 +18,18 @@ async function main() {
         },
         radius: { sm: 8, md: 12 },
         spacing: { sectionY: 64 },
+        sectionUi: {
+          hero: {
+            headlinePreset: "prominent",
+            container: "wide",
+            ctaVariant: "filled",
+            sectionBorderBottom: false,
+          },
+          faq: {
+            presentation: "cards",
+            titlePreset: "bold",
+          },
+        },
       },
       // The DB column is now unused at runtime (allowlist comes from the
       // in-code registry) but we keep it populated so older code paths and
@@ -36,6 +48,18 @@ async function main() {
         },
         radius: { sm: 8, md: 12 },
         spacing: { sectionY: 64 },
+        sectionUi: {
+          hero: {
+            headlinePreset: "prominent",
+            container: "wide",
+            ctaVariant: "filled",
+            sectionBorderBottom: false,
+          },
+          faq: {
+            presentation: "cards",
+            titlePreset: "bold",
+          },
+        },
       },
       allowedComponents: ["hero", "faq"],
     },
@@ -54,6 +78,18 @@ async function main() {
         },
         radius: { sm: 4, md: 6 },
         spacing: { sectionY: 48 },
+        sectionUi: {
+          hero: {
+            headlinePreset: "subtle",
+            container: "narrow",
+            ctaVariant: "outline",
+            sectionBorderBottom: true,
+          },
+          faq: {
+            presentation: "minimal-list",
+            titlePreset: "minimal",
+          },
+        },
       },
       allowedComponents: ["hero", "faq"],
     },
@@ -69,6 +105,18 @@ async function main() {
         },
         radius: { sm: 4, md: 6 },
         spacing: { sectionY: 48 },
+        sectionUi: {
+          hero: {
+            headlinePreset: "subtle",
+            container: "narrow",
+            ctaVariant: "outline",
+            sectionBorderBottom: true,
+          },
+          faq: {
+            presentation: "minimal-list",
+            titlePreset: "minimal",
+          },
+        },
       },
       allowedComponents: ["hero", "faq"],
     },

@@ -1,4 +1,21 @@
+"use client";
+
 import type { CSSProperties, ReactNode } from "react";
+import { createContext, useContext, useMemo } from "react";
+
+/** Optional per-section presentation hints driven by theme tokens (not duplicate React files). */
+export type SectionUiTokens = {
+  hero?: {
+    headlinePreset?: "prominent" | "subtle";
+    container?: "wide" | "narrow";
+    ctaVariant?: "filled" | "outline";
+    sectionBorderBottom?: boolean;
+  };
+  faq?: {
+    presentation?: "cards" | "minimal-list";
+    titlePreset?: "bold" | "minimal";
+  };
+};
 
 export type ThemeTokens = {
   colors?: {
@@ -9,7 +26,23 @@ export type ThemeTokens = {
   };
   radius?: { sm?: number; md?: number };
   spacing?: { sectionY?: number };
+  sectionUi?: SectionUiTokens;
 };
+
+export type SiteThemeContextValue = {
+  themeKey: string;
+  tokens: ThemeTokens;
+};
+
+const SiteThemeContext = createContext<SiteThemeContextValue | null>(null);
+
+export function useSiteTheme(): SiteThemeContextValue {
+  const ctx = useContext(SiteThemeContext);
+  if (!ctx) {
+    throw new Error("useSiteTheme must be used within ThemeProvider");
+  }
+  return ctx;
+}
 
 export function ThemeProvider({
   themeKey,
@@ -33,9 +66,16 @@ export function ThemeProvider({
     minHeight: "100vh",
   };
 
+  const value = useMemo(
+    () => ({ themeKey, tokens }),
+    [themeKey, tokens],
+  );
+
   return (
-    <div data-theme={themeKey} style={style}>
-      {children}
-    </div>
+    <SiteThemeContext.Provider value={value}>
+      <div data-theme={themeKey} style={style}>
+        {children}
+      </div>
+    </SiteThemeContext.Provider>
   );
 }
