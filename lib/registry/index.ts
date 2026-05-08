@@ -38,7 +38,7 @@ export const themeOverrides: Record<
 > = {};
 
 /** Themes we resolve sections for (matches DB `themes.key`). */
-export const registeredThemeKeys = ["modern", "minimal"] as const;
+export const registeredThemeKeys = ["modern", "minimal", "bold"] as const;
 
 export type RegisteredThemeKey = (typeof registeredThemeKeys)[number];
 

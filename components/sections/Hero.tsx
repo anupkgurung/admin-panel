@@ -20,6 +20,7 @@ export function Hero(props: HeroProps) {
   const container = heroUi.container ?? "wide";
   const ctaVariant = heroUi.ctaVariant ?? "filled";
   const sectionBorderBottom = heroUi.sectionBorderBottom ?? false;
+  const surface = heroUi.surface ?? "default";
 
   const { variant = "centered", headline, subheadline, cta } = props;
   const isSplit = variant === "split";
@@ -30,15 +31,23 @@ export function Hero(props: HeroProps) {
   const headingClass =
     headlinePreset === "subtle"
       ? "text-3xl font-light tracking-tight"
-      : "text-4xl font-bold tracking-tight md:text-5xl";
+      : headlinePreset === "dramatic"
+        ? "text-4xl font-black uppercase tracking-tight md:text-6xl md:leading-tight"
+        : "text-4xl font-bold tracking-tight md:text-5xl";
 
   const subheadClass =
     headlinePreset === "subtle"
       ? "mt-3 max-w-xl text-base"
-      : "mt-4 text-lg";
+      : headlinePreset === "dramatic"
+        ? "mt-5 max-w-2xl text-lg md:text-xl"
+        : "mt-4 text-lg";
 
   const ctaBase =
-    headlinePreset === "subtle" ? "mt-6 inline-block text-sm" : "mt-8 inline-block text-sm";
+    headlinePreset === "subtle"
+      ? "mt-6 inline-block text-sm"
+      : headlinePreset === "dramatic"
+        ? "mt-10 inline-block text-base md:text-lg font-bold uppercase tracking-wide"
+        : "mt-8 inline-block text-sm";
 
   const ctaFilled =
     "px-6 py-3 font-semibold text-white";
@@ -47,12 +56,18 @@ export function Hero(props: HeroProps) {
 
   const useFilled = ctaVariant === "filled";
 
+  const bandBg =
+    surface === "primary-band"
+      ? "color-mix(in srgb, var(--color-primary) 22%, var(--color-bg))"
+      : undefined;
+
   return (
     <section
       className={`px-6 ${sectionBorderBottom ? "border-b" : ""}`}
       style={{
         paddingTop: "var(--spacing-section-y)",
         paddingBottom: "var(--spacing-section-y)",
+        ...(bandBg ? { backgroundColor: bandBg } : {}),
         ...(sectionBorderBottom
           ? { borderColor: "rgba(0,0,0,0.08)" }
           : {}),
