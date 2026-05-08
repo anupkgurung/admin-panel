@@ -223,8 +223,7 @@ Operational hardening:
 ### R2. Co-locate component schemas with React components
 **Outcome**: schema, name, and the React component live together; the seed becomes a sync step, not the source of truth.
 
-- For each component, create a co-located definition file, e.g. `components/themes/_definitions/hero.ts` and `faq.ts`, exporting:
-  - `key`, `name`, `schema` (JSON Schema), and a re-export of the per-theme React components if convenient.
+- Hero and FAQ JSON schemas live in [`components/themes/_definitions/marketing.ts`](components/themes/_definitions/marketing.ts) with the other marketing section schemas (still exported via [`components/themes/_definitions/index.ts`](components/themes/_definitions/index.ts)). Their React implementations live in [`components/sections/marketing.tsx`](components/sections/marketing.tsx) alongside NavHeader, FeatureGrid, etc.
 - Move the inline schemas out of [`prisma/seed.ts`](prisma/seed.ts) and into those files.
 - Add a `npm run sync:components` script that upserts `component_definitions` from the in-code definitions:
   - keeps the DB row (so `page_sections.component_definition_id` FK still works)

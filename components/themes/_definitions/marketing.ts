@@ -1,3 +1,68 @@
+/** Hero / FAQ JSON schemas live alongside marketing sections for one catalog file. */
+export const heroDefinition = {
+  key: "hero",
+  name: "Hero",
+  schema: {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    title: "Hero",
+    type: "object",
+    additionalProperties: false,
+    required: ["headline", "cta"],
+    properties: {
+      variant: {
+        type: "string",
+        enum: ["centered", "split"],
+        default: "centered",
+      },
+      headline: { type: "string", minLength: 1, maxLength: 80 },
+      subheadline: { type: "string", maxLength: 180 },
+      cta: {
+        type: "object",
+        additionalProperties: false,
+        required: ["label", "href"],
+        properties: {
+          label: { type: "string", minLength: 1, maxLength: 30 },
+          href: { type: "string", minLength: 1 },
+          style: {
+            type: "string",
+            enum: ["primary", "secondary"],
+            default: "primary",
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+export const faqDefinition = {
+  key: "faq",
+  name: "FAQ",
+  schema: {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    title: "FAQ",
+    type: "object",
+    additionalProperties: false,
+    required: ["items"],
+    properties: {
+      title: { type: "string", default: "FAQs", maxLength: 60 },
+      items: {
+        type: "array",
+        minItems: 1,
+        maxItems: 20,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["question", "answer"],
+          properties: {
+            question: { type: "string", minLength: 1, maxLength: 120 },
+            answer: { type: "string", minLength: 1, maxLength: 400 },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
 export const navHeaderDefinition = {
   key: "nav_header",
   name: "Nav Header",

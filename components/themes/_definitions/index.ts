@@ -1,9 +1,9 @@
-import { heroDefinition } from "./hero";
-import { faqDefinition } from "./faq";
 import {
   ctaBannerDefinition,
+  faqDefinition,
   featureGridDefinition,
   footerDefinition,
+  heroDefinition,
   logosStripDefinition,
   navHeaderDefinition,
   pricingTableDefinition,

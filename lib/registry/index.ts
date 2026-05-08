@@ -1,12 +1,12 @@
 import type { ComponentType } from "react";
 import { componentDefinitionKeys } from "@/components/themes/_definitions";
 
-import { Hero as SharedHero } from "@/components/sections/Hero";
-import { Faq as SharedFaq } from "@/components/sections/Faq";
 import {
   CtaBanner,
+  Faq,
   FeatureGrid,
   Footer,
+  Hero,
   LogosStrip,
   NavHeader,
   PricingTable,
@@ -17,8 +17,8 @@ export type SectionComponent = ComponentType<Record<string, unknown>>;
 
 /** Default renderers keyed by `component_definitions.key` — shared across themes. */
 export const sharedRegistry: Record<string, SectionComponent> = {
-  hero: SharedHero as unknown as SectionComponent,
-  faq: SharedFaq as unknown as SectionComponent,
+  hero: Hero as unknown as SectionComponent,
+  faq: Faq as unknown as SectionComponent,
   nav_header: NavHeader as unknown as SectionComponent,
   feature_grid: FeatureGrid as unknown as SectionComponent,
   cta_banner: CtaBanner as unknown as SectionComponent,
