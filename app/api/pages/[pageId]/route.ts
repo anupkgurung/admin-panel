@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getActiveTheme } from "@/lib/admin/activeTheme";
+import { getSectionCatalogEntry } from "@/lib/sections/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -40,19 +41,22 @@ export async function GET(
       title: page.title,
       status: page.status,
       publishedAt: page.publishedAt,
-      sections: page.sections.map((s) => ({
-        id: s.id,
-        order: s.order,
-        enabled: s.enabled,
-        instanceKey: s.instanceKey,
-        props: s.props,
-        component: {
-          id: s.componentDefinition.id,
-          key: s.componentDefinition.key,
-          name: s.componentDefinition.name,
-          schema: s.componentDefinition.schema,
-        },
-      })),
+      sections: page.sections.map((s) => {
+        const catalog = getSectionCatalogEntry(s.componentDefinition.key);
+        return {
+          id: s.id,
+          order: s.order,
+          enabled: s.enabled,
+          instanceKey: s.instanceKey,
+          props: s.props,
+          component: {
+            id: s.componentDefinition.id,
+            key: s.componentDefinition.key,
+            name: catalog?.name ?? s.componentDefinition.name,
+            schema: catalog?.schema ?? s.componentDefinition.schema,
+          },
+        };
+      }),
     },
   });
 }

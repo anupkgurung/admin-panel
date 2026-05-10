@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
-import { getAllowedComponents } from "@/lib/registry";
-import { validateProps } from "@/lib/validation/validateProps";
+import {
+  resolveAllowedKeysForTheme,
+  validateSectionProps,
+} from "@/lib/sections/catalog";
 
 export type AllowlistViolation = {
   pageId: string;
@@ -29,11 +31,13 @@ export async function findThemeSectionsViolatingAllowlist(
 ): Promise<AllowlistViolation[]> {
   const theme = await prisma.theme.findUnique({
     where: { id: themeId },
-    select: { key: true },
+    select: { key: true, allowedComponents: true },
   });
   if (!theme) return [];
 
-  const allowed = new Set(getAllowedComponents(theme.key));
+  const allowed = new Set(
+    resolveAllowedKeysForTheme(theme.key, theme.allowedComponents),
+  );
 
   const sections = await prisma.pageSection.findMany({
     where: { page: { themeId } },
@@ -68,7 +72,7 @@ export async function findPageSectionsAllowlistViolations(
   const page = await prisma.page.findUnique({
     where: { id: pageId },
     select: {
-      theme: { select: { key: true } },
+      theme: { select: { key: true, allowedComponents: true } },
     },
   });
 
@@ -76,7 +80,12 @@ export async function findPageSectionsAllowlistViolations(
     return { themeKey: null, violations: [] };
   }
 
-  const allowed = new Set(getAllowedComponents(page.theme.key));
+  const allowed = new Set(
+    resolveAllowedKeysForTheme(
+      page.theme.key,
+      page.theme.allowedComponents,
+    ),
+  );
 
   const sections = await prisma.pageSection.findMany({
     where: { pageId },
@@ -108,14 +117,14 @@ export async function findPageSectionsWithInvalidProps(
   const sections = await prisma.pageSection.findMany({
     where: { pageId },
     include: {
-      componentDefinition: { select: { key: true, schema: true } },
+      componentDefinition: { select: { key: true } },
     },
   });
 
   const violations: PropsViolation[] = [];
   for (const s of sections) {
-    const result = validateProps(
-      s.componentDefinition.schema as object,
+    const result = validateSectionProps(
+      s.componentDefinition.key,
       s.props,
     );
     if (!result.valid) {

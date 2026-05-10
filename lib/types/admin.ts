@@ -1,5 +1,7 @@
 import type { Prisma, PageStatus } from "@prisma/client";
 
+import { getSectionCatalogEntry } from "@/lib/sections/catalog";
+
 /**
  * Single source of truth for admin/page DTOs shared between server actions,
  * API route handlers, RSC entry points, and admin client components.
@@ -93,12 +95,15 @@ export function toPageDTO(page: PageWithSections): PageDTO {
         enabled: s.enabled,
         instanceKey: s.instanceKey,
         props: (s.props ?? {}) as Record<string, unknown>,
-        component: {
-          id: s.componentDefinition.id,
-          key: s.componentDefinition.key,
-          name: s.componentDefinition.name,
-          schema: s.componentDefinition.schema as object,
-        },
+        component: (() => {
+          const catalog = getSectionCatalogEntry(s.componentDefinition.key);
+          return {
+            id: s.componentDefinition.id,
+            key: s.componentDefinition.key,
+            name: catalog?.name ?? s.componentDefinition.name,
+            schema: (catalog?.schema ?? s.componentDefinition.schema) as object,
+          };
+        })(),
       })),
   };
 }

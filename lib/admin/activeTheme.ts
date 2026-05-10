@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getAllowedComponents } from "@/lib/registry";
+import { resolveAllowedKeysForTheme } from "@/lib/sections/catalog";
 
 export type ActiveTheme = {
   id: string;
@@ -21,6 +21,9 @@ export async function getActiveTheme(): Promise<ActiveTheme> {
     id: settings.activeTheme.id,
     key: settings.activeTheme.key,
     name: settings.activeTheme.name,
-    allowedComponents: getAllowedComponents(settings.activeTheme.key),
+    allowedComponents: resolveAllowedKeysForTheme(
+      settings.activeTheme.key,
+      settings.activeTheme.allowedComponents,
+    ),
   };
 }

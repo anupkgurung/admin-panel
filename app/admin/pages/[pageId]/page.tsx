@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getActiveTheme } from "@/lib/admin/activeTheme";
 import { PageBuilder } from "@/components/admin/PageBuilder";
+import { getSectionCatalogEntry } from "@/lib/sections/catalog";
 import type { ComponentDef } from "@/lib/types/admin";
 import { toPageDTO } from "@/lib/types/admin";
 
@@ -29,17 +30,25 @@ export default async function AdminPageBuilder({
     notFound();
   }
 
-  const allowedComponentDefs = await prisma.componentDefinition.findMany({
+  const allowedRows = await prisma.componentDefinition.findMany({
     where: { key: { in: activeTheme.allowedComponents } },
-    select: { id: true, key: true, name: true, schema: true },
+    select: { id: true, key: true },
   });
+  const idByKey = new Map(allowedRows.map((r) => [r.key, r.id]));
 
-  const allowedComponents: ComponentDef[] = allowedComponentDefs.map((c) => ({
-    id: c.id,
-    key: c.key,
-    name: c.name,
-    schema: c.schema as object,
-  }));
+  const allowedComponents: ComponentDef[] = [];
+  for (const key of activeTheme.allowedComponents) {
+    const entry = getSectionCatalogEntry(key);
+    const id = idByKey.get(key);
+    if (entry && id) {
+      allowedComponents.push({
+        id,
+        key,
+        name: entry.name,
+        schema: entry.schema as object,
+      });
+    }
+  }
 
   return (
     <PageBuilder

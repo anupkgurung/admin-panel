@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
-import { getAllowedComponents } from "@/lib/registry";
+import { resolveAllowedKeysForTheme } from "@/lib/sections/catalog";
 import { findThemeSectionsViolatingAllowlist } from "@/lib/admin/publishGuards";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,10 @@ export async function GET() {
       key: settings.activeTheme.key,
       name: settings.activeTheme.name,
       tokens: settings.activeTheme.tokens,
-      allowedComponents: getAllowedComponents(settings.activeTheme.key),
+      allowedComponents: resolveAllowedKeysForTheme(
+        settings.activeTheme.key,
+        settings.activeTheme.allowedComponents,
+      ),
     },
   });
 }
@@ -89,7 +92,10 @@ export async function PATCH(req: Request) {
       key: theme.key,
       name: theme.name,
       tokens: theme.tokens,
-      allowedComponents: getAllowedComponents(theme.key),
+      allowedComponents: resolveAllowedKeysForTheme(
+        theme.key,
+        theme.allowedComponents,
+      ),
     },
   });
 }
