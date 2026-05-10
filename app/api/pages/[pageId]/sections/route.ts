@@ -4,8 +4,11 @@ import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getActiveTheme } from "@/lib/admin/activeTheme";
-import { getAllowedComponents } from "@/lib/registry";
-import { validateProps } from "@/lib/validation/validateProps";
+import {
+  hasCatalogKey,
+  resolveAllowedKeysForTheme,
+  validateSectionProps,
+} from "@/lib/sections/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -44,13 +47,16 @@ export async function POST(
 
   const page = await prisma.page.findFirst({
     where: { id: params.pageId, themeId: activeTheme.id },
-    include: { theme: { select: { key: true } } },
+    include: { theme: { select: { key: true, allowedComponents: true } } },
   });
   if (!page) {
     return NextResponse.json({ error: "page_not_found" }, { status: 404 });
   }
 
-  const allowed = getAllowedComponents(page.theme.key);
+  const allowed = resolveAllowedKeysForTheme(
+    page.theme.key,
+    page.theme.allowedComponents,
+  );
   if (!allowed.includes(componentKey)) {
     return NextResponse.json(
       {
@@ -60,6 +66,13 @@ export async function POST(
         allowedComponents: allowed,
       },
       { status: 400 },
+    );
+  }
+
+  if (!hasCatalogKey(componentKey)) {
+    return NextResponse.json(
+      { error: "component_not_found", componentKey },
+      { status: 404 },
     );
   }
 
@@ -77,7 +90,7 @@ export async function POST(
   // empty body or empty props start as "draft" sections (filled in by admin via PATCH).
   let propsToStore: object = {};
   if (props && typeof props === "object" && Object.keys(props).length > 0) {
-    const result = validateProps(component.schema as object, props);
+    const result = validateSectionProps(componentKey, props);
     if (!result.valid) {
       return NextResponse.json(
         { error: "validation_failed", errors: result.errors },

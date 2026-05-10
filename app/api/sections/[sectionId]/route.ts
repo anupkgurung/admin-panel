@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getActiveTheme } from "@/lib/admin/activeTheme";
-import { validateProps } from "@/lib/validation/validateProps";
+import { validateSectionProps } from "@/lib/sections/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,7 @@ export async function PATCH(
       page: { themeId: activeTheme.id },
     },
     include: {
-      componentDefinition: { select: { schema: true } },
+      componentDefinition: { select: { key: true } },
     },
   });
 
@@ -52,8 +52,8 @@ export async function PATCH(
   } = {};
 
   if (props && typeof props === "object") {
-    const result = validateProps(
-      section.componentDefinition.schema as object,
+    const result = validateSectionProps(
+      section.componentDefinition.key,
       props,
     );
     if (!result.valid) {
