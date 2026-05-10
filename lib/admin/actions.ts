@@ -13,8 +13,11 @@ import {
   findPageSectionsWithInvalidProps,
   findThemeSectionsViolatingAllowlist,
 } from "@/lib/admin/publishGuards";
-import { getAllowedComponents } from "@/lib/registry";
-import { validateProps } from "@/lib/validation/validateProps";
+import {
+  hasCatalogKey,
+  resolveAllowedKeysForTheme,
+  validateSectionProps,
+} from "@/lib/sections/catalog";
 import type {
   ActionResult,
   AllowlistViolation,
@@ -128,17 +131,24 @@ export async function addSection(
 
   const page = await prisma.page.findFirst({
     where: { id: pageId, themeId: activeTheme.id },
-    include: { theme: { select: { key: true } } },
+    include: { theme: { select: { key: true, allowedComponents: true } } },
   });
   if (!page) return err("page_not_found");
 
-  const allowed = getAllowedComponents(page.theme.key);
+  const allowed = resolveAllowedKeysForTheme(
+    page.theme.key,
+    page.theme.allowedComponents,
+  );
   if (!allowed.includes(componentKey)) {
     return err("component_not_allowed_by_theme", undefined, {
       componentKey,
       themeKey: page.theme.key,
       allowedComponents: allowed,
     });
+  }
+
+  if (!hasCatalogKey(componentKey)) {
+    return err("component_not_found", undefined, { componentKey });
   }
 
   const component = await prisma.componentDefinition.findUnique({
@@ -198,7 +208,7 @@ export async function updateSection(
   const section = await prisma.pageSection.findFirst({
     where: { id: sectionId, page: { themeId: activeTheme.id } },
     include: {
-      componentDefinition: { select: { schema: true } },
+      componentDefinition: { select: { key: true } },
     },
   });
   if (!section) return err("section_not_found");
@@ -211,8 +221,8 @@ export async function updateSection(
   } = {};
 
   if (patch.props && typeof patch.props === "object") {
-    const result = validateProps(
-      section.componentDefinition.schema as object,
+    const result = validateSectionProps(
+      section.componentDefinition.key,
       patch.props,
     );
     if (!result.valid) {

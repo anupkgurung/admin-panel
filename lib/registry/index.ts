@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { componentDefinitionKeys } from "@/components/themes/_definitions";
+import { resolveAllowedKeysForTheme } from "@/lib/sections/catalog";
 
 import {
   CtaBanner,
@@ -13,7 +13,14 @@ import {
   Testimonials,
 } from "@/components/sections/marketing";
 
+import { registeredThemeKeys } from "./registeredThemes";
+
 export type SectionComponent = ComponentType<Record<string, unknown>>;
+
+export {
+  registeredThemeKeys,
+  type RegisteredThemeKey,
+} from "./registeredThemes";
 
 /** Default renderers keyed by `component_definitions.key` — shared across themes. */
 export const sharedRegistry: Record<string, SectionComponent> = {
@@ -37,11 +44,6 @@ export const themeOverrides: Record<
   Partial<Record<string, SectionComponent>>
 > = {};
 
-/** Themes we resolve sections for (matches DB `themes.key`). */
-export const registeredThemeKeys = ["modern", "minimal", "bold"] as const;
-
-export type RegisteredThemeKey = (typeof registeredThemeKeys)[number];
-
 export function resolveComponent(
   themeKey: string,
   componentKey: string,
@@ -52,13 +54,12 @@ export function resolveComponent(
 }
 
 /**
- * Allowed component keys for admin/theme guards — aligned with DB catalog.
+ * Allowed component keys when `themes.allowed_components` is omitted.
+ * Prefer `resolveAllowedKeysForTheme(themeKey, theme.allowedComponents)` for
+ * DB-backed lists.
  */
 export function getAllowedComponents(themeKey: string): string[] {
-  if (!registeredThemeKeys.includes(themeKey as RegisteredThemeKey)) {
-    return [];
-  }
-  return componentDefinitionKeys;
+  return resolveAllowedKeysForTheme(themeKey, undefined);
 }
 
 export function getAllThemeKeys(): string[] {
