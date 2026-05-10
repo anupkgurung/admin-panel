@@ -130,7 +130,7 @@ Implement write route handlers:
 Validation rules (server-side, mandatory):
 - `component_definition_id` must exist
 - component key must be **allowed** by page’s theme (`themes.allowed_components`)
-- `props` must validate against `component_definitions.schema` (AJV)
+- `props` must validate against the in-code catalog schema (**`validateSectionProps`**, AJV); DB **`component_definitions.schema`** is kept in sync optionally via **`sync:components`** but is not the runtime source of truth
 - apply schema defaults if desired (AJV `useDefaults`)
 
 Deliverables:
@@ -314,8 +314,8 @@ Operational hardening:
 - Admin UI components contain no `fetch('/api/...')` calls; mutations go through server actions in `lib/admin/actions.ts`.
 - `page_sections.order` is a fractional rank; reorder endpoint performs a single `UPDATE`.
 - A single `lib/types/admin.ts` (or equivalent) is the only place these DTOs are defined.
-- `getAllowedComponents(themeKey)` is the only allowlist source read by API handlers and admin pages; `asAllowlist()` is gone from `lib/admin/*` and `app/api/*`.
-- Component schemas live next to their React components and are upserted into `component_definitions` via `sync:components`.
+- **Allowlists**: handlers and guards use **`resolveAllowedKeysForTheme(themeKey, theme.allowedComponents)`** (from [`lib/sections/catalog.ts`](lib/sections/catalog.ts)), intersecting normalized `themes.allowed_components` with known catalog keys. [`getAllowedComponents(themeKey)`](lib/registry/index.ts) remains as a shim that calls **`resolveAllowedKeysForTheme(themeKey, undefined)`** (full catalog keys for registered themes). `asAllowlist()` is gone.
+- **Validation + admin picker metadata**: section props validate with **`validateSectionProps` / AJV against in-code JSON Schemas** from [`components/themes/_definitions`](components/themes/_definitions/index.ts); the app does **not** read **`component_definitions.schema`** on write/publish paths. **`toPageDTO` / admin APIs** overlay catalog `name` and `schema` when present so the SchemaForm stays in sync with code. DB rows (`component_definitions` + `component_definition_id` FK) remain for integrity and **`sync:components`** / seeds.
 
 ### Refactor verification (regression checks)
 Re-run these against the existing behavior — none of the user-visible behavior should change:
